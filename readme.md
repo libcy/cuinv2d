@@ -5,7 +5,9 @@ Cuda based 2D elastic full waveform inversion program. [fd2d-adjoint](https://gi
 The input file format of this program is very similar to that of [specfem2d](https://github.com/geodynamics/specfem2d), the source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
 
 Compilation:
+```
 nvcc cuinv2d.cu -arch=sm_50 -lcublas -lcusolver -lcufft
+```
 
 #### Some synthetic tests
 * True model(Vs ranging from 3150km/s to 3850km/s, 25 sources and 132 stations locating randomly)<br>
