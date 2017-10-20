@@ -25,23 +25,3 @@ nvcc cuinv2d.cu -arch=sm_50 -lcublas -lcusolver -lcufft
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/cm3.png) <br>
   model_7<br>
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/cm7.png) <br>
-
-* Comparison of different initial model (model_4, 10iteration)<br>
-  Vs_init = 2800km/s<br>
-  ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/i2800.png) <br>
-  Vs_init = 3150km/s<br>
-  ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/i3150.png) <br>
-  Vs_init = 3500km/s<br>
-  ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/i3500.png) <br>
-  Vs_init = 3850km/s<br>
-  ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/i3850.png) <br>
-  Vs_init = 4200km/s<br>
-  ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/i4200.png) <br>
-
-* Comparison of different source number (mode_7, 10iteration)<br>
-  nsrc = 10<br>
-  ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/s10.png) <br>
-  nsrc = 15<br>
-  ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/s15.png) <br>
-  nsrc = 20<br>
-  ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/s20.png) <br>
