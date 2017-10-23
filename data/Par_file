@@ -5,10 +5,11 @@ misfit_type                     = 1       # 0: waveform 1: envelope
 obs_type                        = 1       # 0: v 1: u 2: u
 obs_su                          = 0       # read observed data from su file
 obs_su_path                     = trace   # folder containing su file
+ntask                           = 5       # run foward simultaneously
 
-model_init                      = model/homo_2800
+model_init                      = model/homo_3500
 model_true                      = model/checker_4x4
-output_path                     = archive/checker_4x4_test_bf6
+output_path                     = output
 
 nt                              = 5000
 dt                              = 0.06
@@ -17,12 +18,12 @@ nsrc                            = 25      # number of sources
 
 absorb_bottom                   = 1
 absorb_right                    = 1
-absorb_top                      = 0
+absorb_top                      = 1
 absorb_left                     = 1
 absorb_width                    = 48000   # width of absorbing boundary
 
 optimize                        = 1       # 0: NLCG 1: LBFGS
-inv_maxiter                     = 0       # reset cg search direction
+inv_maxiter                     = 0       # reset search direction periodicly
 inv_parameter                   = 1       # 0: lambda 1: mu 2: rho
 inv_iteration                   = 5       # maximum inversion iteration
 
