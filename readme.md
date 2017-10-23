@@ -17,13 +17,13 @@ nvcc cuinv2d.cu -arch=sm_50 -lcublas -lcusolver -lcufft
 ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/15.png)
 
 * Comparison of NLCG and L-BFGS (model_1)<br>
-  Vs_init = 2500km/s<br>
+  Vs_init = 3500km/s<br>
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/c3500.png) <br>
-  Vs_init = 2500km/s<br>
+  Vs_init = 2800km/s<br>
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/c2800.png) <br>
 
 * Comparison of envelope misfit and rms misfit (Vs_init = 2800km/s)<br>
-  model_2<br>
+  model_3<br>
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/cm3.png) <br>
   model_7<br>
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/cm7.png) <br>
