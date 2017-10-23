@@ -2,7 +2,7 @@
 
 Cuda based 2D elastic full waveform inversion program. [fd2d-adjoint](https://github.com/phlos/fd2d-adjoint) and [seisflows](https://github.com/rmodrak/seisflows) gave me many useful references in writing this. Finite difference method can be accelerated significantly by GPU, and one forward calculation is usually done within a second. The whole inversion process is also performed in GPU, which eliminates the time of reading/writing files and data transfer between host and device.
 
-The input file format of this program is very similar to that of [specfem2d](https://github.com/geodynamics/specfem2d), the source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
+I initially tried to used the forward modeling part as a custom solver for seisflows, so the input file format of this program is very similar to that of [specfem2d](https://github.com/geodynamics/specfem2d). Model, source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
 
 Compilation:
 ```
