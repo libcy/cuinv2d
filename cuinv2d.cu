@@ -15,10 +15,10 @@
      #include <unistd.h>
 #endif
 
-#define devij int i = blockIdx.x, j = threadIdx.x + blockIdx.y * blockDim.x
+#define devij int i = blockIdx.x, j = threadIdx.x
+#define devij2 int i0 = blockIdx.x, i = blockIdx.x+blockDim.x*blockIdx.y, j = threadIdx.x;
 
 const float pi = 3.1415927;
-const int nbt = 1;
 __constant__ float d_pi = 3.1415927;
 
 cublasHandle_t cublas_handle;
@@ -27,6 +27,7 @@ cufftHandle cufft_handle;
 
 namespace dat{
     int nx;
+    int nx2;
     int nz;
     int nt;
     float dt;
@@ -36,6 +37,7 @@ namespace dat{
     float **Z;
 
     dim3 nxb;
+    dim3 nxb2;
     dim3 nzt;
 
     int sfe;
@@ -51,9 +53,10 @@ namespace dat{
     int absorb_bottom;
     float absorb_width;
 
-    int isrc;
+    int *isrc;
     int nsrc;
     int nrec;
+    int ntask;
     int obs_type;
     int obs_su;
     int misfit_type;
@@ -236,14 +239,12 @@ namespace mat{
         return mat;
     }
     float **init(float **mat, const float init, const int m, const int n){
-        dim3 dimBlock(m, nbt);
-        mat::_setValue<<<dimBlock, n / nbt>>>(mat, init);
+        mat::_setValue<<<m, n>>>(mat, init);
         return mat;
     }
     float ***init(float ***mat, const float init, const int p, const int m, const int n){
-        dim3 dimBlock(m, nbt);
         for(int i = 0; i < p; i++){
-            mat::_setValue<<<dimBlock, n / nbt>>>(mat, init, i);
+            mat::_setValue<<<m, n>>>(mat, init, i);
         }
         return mat;
     }
@@ -344,12 +345,10 @@ namespace mat{
         mat::_copy<<<m, 1>>>(mat, init);
     }
     void copy(float **mat, float **init, const int m, const int n){
-        dim3 dimBlock(m, nbt);
-        mat::_copy<<<dimBlock, n / nbt>>>(mat, init);
+        mat::_copy<<<m, n>>>(mat, init);
     }
     void copy(float **mat, float **init, float k, const int m, const int n){
-        dim3 dimBlock(m, nbt);
-        mat::_copy<<<dimBlock, n / nbt>>>(mat, init, k);
+        mat::_copy<<<m, n>>>(mat, init, k);
     }
     void copyHostToDevice(float *d_a, const float *a, const int m){
         cudaMemcpy(d_a, a , m * sizeof(float), cudaMemcpyHostToDevice);
@@ -399,8 +398,7 @@ namespace mat{
         mat::_calc<<<m, 1>>>(c, ka, a, kb, b);
     }
     void calc(float **c, float ka, float **a, float kb, float **b, int m, int n){
-        dim3 dimBlock(m, nbt);
-        mat::_calc<<<dimBlock, n / nbt>>>(c, ka, a, kb, b);
+        mat::_calc<<<m, n>>>(c, ka, a, kb, b);
     }
     float norm(float *a, int n){
         float norm_a = 0;
@@ -492,6 +490,7 @@ namespace mat{
 }
 
 dim3 &nxb = dat::nxb;
+dim3 &nxb2 = dat::nxb2;
 dim3 &nzt = dat::nzt;
 
 int &sh = dat::wave_propagation_sh;
@@ -499,34 +498,36 @@ int &psv = dat::wave_propagation_psv;
 int &mode = dat::simulation_mode;
 
 int &nx = dat::nx;
+int &nx2 = dat::nx2;
 int &nz = dat::nz;
 int &nt = dat::nt;
 int &nsrc = dat::nsrc;
 int &nrec = dat::nrec;
+int &ntask = dat::ntask;
 
 float &dt = dat::dt;
 
 __global__ void divSY(float **dsy, float **sxy, float **szy, float **X, float **Z, int nx, int nz){
-    devij;
-    if(i >= 2 && i < nx - 2){
-        float dx = X[i][j] - X[i-1][j];
-        float dx3 = X[i+1][j] - X[i-2][j];
+    devij2;
+    if(i0 >= 2 && i0 < nx - 2){
+        float dx = X[i0][j] - X[i0-1][j];
+        float dx3 = X[i0+1][j] - X[i0-2][j];
         dsy[i][j] = 9*(sxy[i][j] - sxy[i-1][j])/(8*dx) - (sxy[i+1][j] - sxy[i-2][j])/(8*dx3);
     }
     else{
         dsy[i][j] = 0;
     }
     if(j >= 2 && j < nz - 2){
-        float dz = Z[i][j] - Z[i][j-1];
-        float dz3 = Z[i][j+1] - Z[i][j-2];
+        float dz = Z[i0][j] - Z[i0][j-1];
+        float dz3 = Z[i0][j+1] - Z[i0][j-2];
         dsy[i][j] += 9*(szy[i][j] - szy[i][j-1])/(8*dz) - (szy[i][j+1] - szy[i][j-2])/(8*dz3);
     }
 }
 __global__ void divSXZ(float **dsx, float **dsz, float **sxx, float **szz, float **sxz, float **X, float **Z, int nx, int nz){
-    devij;
-    if(i >= 2 && i < nx - 2){
-        float dx = X[i][j] - X[i-1][j];
-        float dx3 = X[i+1][j] - X[i-2][j];
+    devij2;
+    if(i0 >= 2 && i0 < nx - 2){
+        float dx = X[i0][j] - X[i0-1][j];
+        float dx3 = X[i0+1][j] - X[i0-2][j];
         dsx[i][j] = 9*(sxx[i][j] - sxx[i-1][j])/(8*dx) - (sxx[i+1][j] - sxx[i-2][j])/(8*dx3);
         dsz[i][j] = 9*(sxz[i][j] - sxz[i-1][j])/(8*dx) - (sxz[i+1][j] - sxz[i-2][j])/(8*dx3);
     }
@@ -535,25 +536,25 @@ __global__ void divSXZ(float **dsx, float **dsz, float **sxx, float **szz, float
         dsz[i][j] = 0;
     }
     if(j >= 2 && j < nz - 2){
-        float dz = Z[i][j] - Z[i][j-1];
-        float dz3 = Z[i][j+1] - Z[i][j-2];
+        float dz = Z[i0][j] - Z[i0][j-1];
+        float dz3 = Z[i0][j+1] - Z[i0][j-2];
         dsx[i][j] += 9*(sxz[i][j] - sxz[i][j-1])/(8*dz) - (sxz[i][j+1] - sxz[i][j-2])/(8*dz3);
         dsz[i][j] += 9*(szz[i][j] - szz[i][j-1])/(8*dz) - (szz[i][j+1] - szz[i][j-2])/(8*dz3);
     }
 }
 __global__ void divVY(float **dvydx, float **dvydz, float **vy, float **X, float **Z, int nx, int nz){
-    devij;
-    if(i >= 1 && i < nx - 2){
-        float dx = X[i+1][j] - X[i][j];
-        float dx3 = X[i+2][j] - X[i-1][j];
+    devij2;
+    if(i0 >= 1 && i0 < nx - 2){
+        float dx = X[i0+1][j] - X[i0][j];
+        float dx3 = X[i0+2][j] - X[i0-1][j];
         dvydx[i][j] = 9*(vy[i+1][j] - vy[i][j])/(8*dx) - (vy[i+2][j] - vy[i-1][j])/(8*dx3);
     }
     else{
         dvydx[i][j] = 0;
     }
     if(j >= 1 && j < nz - 2){
-        float dz = Z[i][j+1] - Z[i][j];
-        float dz3 = Z[i][j+2] - Z[i][j-1];
+        float dz = Z[i0][j+1] - Z[i0][j];
+        float dz3 = Z[i0][j+2] - Z[i0][j-1];
         dvydz[i][j] = 9*(vy[i][j+1] - vy[i][j])/(8*dz) - (vy[i][j+2] - vy[i][j-1])/(8*dz3);
     }
     else{
@@ -561,10 +562,10 @@ __global__ void divVY(float **dvydx, float **dvydz, float **vy, float **X, float
     }
 }
 __global__ void divVXZ(float **dvxdx, float **dvxdz, float **dvzdx, float **dvzdz, float **vx, float **vz, float **X, float **Z, int nx, int nz){
-    devij;
-    if(i >= 1 && i < nx - 2){
-        float dx = X[i+1][j] - X[i][j];
-        float dx3 = X[i+2][j] - X[i-1][j];
+    devij2;
+    if(i0 >= 1 && i0 < nx - 2){
+        float dx = X[i0+1][j] - X[i0][j];
+        float dx3 = X[i0+2][j] - X[i0-1][j];
         dvxdx[i][j] = 9*(vx[i+1][j]-vx[i][j])/(8*dx)-(vx[i+2][j]-vx[i-1][j])/(8*dx3);
         dvzdx[i][j] = 9*(vz[i+1][j]-vz[i][j])/(8*dx)-(vz[i+2][j]-vz[i-1][j])/(8*dx3);
     }
@@ -573,8 +574,8 @@ __global__ void divVXZ(float **dvxdx, float **dvxdz, float **dvzdx, float **dvzd
         dvzdx[i][j] = 0;
     }
     if(j >= 1 && j < nz - 2){
-        float dz = Z[i][j+1] - Z[i][j];
-        float dz3 = Z[i][j+2] - Z[i][j-1];
+        float dz = Z[i0][j+1] - Z[i0][j];
+        float dz3 = Z[i0][j+2] - Z[i0][j-1];
         dvxdz[i][j] = 9*(vx[i][j+1]-vx[i][j])/(8*dz)-(vx[i][j+2]-vx[i][j-1])/(8*dz3);
         dvzdz[i][j] = 9*(vz[i][j+1]-vz[i][j])/(8*dz)-(vz[i][j+2]-vz[i][j-1])/(8*dz3);
     }
@@ -585,25 +586,29 @@ __global__ void divVXZ(float **dvxdx, float **dvxdz, float **dvzdx, float **dvzd
 }
 
 __global__ void addSTF(float **dsx, float **dsy, float **dsz, float **stf_x, float **stf_y, float **stf_z,
-    int *src_x_id, int *src_z_id, int isrc, int sh, int psv, int it){
+    int *src_x_id, int *src_z_id, int isrc, int sh, int psv, int it, int nx, int nt){
     int is = blockIdx.x;
     int xs = src_x_id[is];
     int zs = src_z_id[is];
-    if(isrc < 0 || isrc == is){
+
+    int is2 = threadIdx.x;
+    if(isrc < 0 || isrc + is2 == is){
         if(sh){
-            dsy[xs][zs] += stf_y[is][it];
+            dsy[xs+is2*nx][zs] += stf_y[is][it+nt*is2];
         }
         if(psv){
-            dsx[xs][zs] += stf_x[is][it];
-            dsz[xs][zs] += stf_z[is][it];
+            dsx[xs+is2*nx][zs] += stf_x[is][it+nt*is2];
+            dsz[xs+is2*nx][zs] += stf_z[is][it+nt*is2];
         }
     }
 }
 __global__ void saveRec(float **out_x, float **out_y, float **out_z, float **vx, float **vy, float **vz,
-    int *rec_x_id, int *rec_z_id, int sh, int psv, int it){
+    int *rec_x_id, int *rec_z_id, int nx, int nt, int sh, int psv, int it){
     int ir = blockIdx.x;
-    int xr = rec_x_id[ir];
+    int xr = rec_x_id[ir] + threadIdx.x * nx;
     int zr = rec_z_id[ir];
+
+    it += threadIdx.x * nt;
     if(sh){
         out_y[ir][it] = vy[xr][zr];
     }
@@ -613,59 +618,61 @@ __global__ void saveRec(float **out_x, float **out_y, float **out_z, float **vx,
     }
 }
 __global__ void saveRec(float ***out_x, float ***out_y, float ***out_z, float **vx, float **vy, float **vz,
-    int *rec_x_id, int *rec_z_id, int isrc, int sh, int psv, int it){
+    int *rec_x_id, int *rec_z_id, int isrc, int nx, int sh, int psv, int it){
     int ir = blockIdx.x;
     int xr = rec_x_id[ir];
     int zr = rec_z_id[ir];
+
+    int is2 = threadIdx.x;
     if(sh){
-        out_y[isrc][ir][it] = vy[xr][zr];
+        out_y[isrc+is2][ir][it] = vy[xr+is2*nx][zr];
     }
     if(psv){
-        out_x[isrc][ir][it] = vx[xr][zr];
-        out_z[isrc][ir][it] = vz[xr][zr];
+        out_x[isrc+is2][ir][it] = vx[xr+is2*nx][zr];
+        out_z[isrc+is2][ir][it] = vz[xr+is2*nx][zr];
     }
 }
 __global__ void updateV(float **v, float **ds, float **rho, float **absbound, float dt){
-    devij;
-    v[i][j] = absbound[i][j] * (v[i][j] + dt * ds[i][j] / rho[i][j]);
+    devij2;
+    v[i][j] = absbound[i0][j] * (v[i][j] + dt * ds[i][j] / rho[i0][j]);
 }
 __global__ void updateSY(float **sxy, float **szy, float **dvydx, float **dvydz, float **mu, float dt){
-    devij;
-    sxy[i][j] += dt * mu[i][j] * dvydx[i][j];
-    szy[i][j] += dt * mu[i][j] * dvydz[i][j];
+    devij2;
+    sxy[i][j] += dt * mu[i0][j] * dvydx[i][j];
+    szy[i][j] += dt * mu[i0][j] * dvydz[i][j];
 }
 __global__ void updateSXZ(float **sxx, float **szz, float **sxz, float **dvxdx, float **dvxdz, float **dvzdx, float **dvzdz,
     float **lambda, float **mu, float dt){
-    devij;
-    sxx[i][j] += dt * ((lambda[i][j] + 2 * mu[i][j]) * dvxdx[i][j] + lambda[i][j] * dvzdz[i][j]);
-    szz[i][j] += dt * ((lambda[i][j] + 2 * mu[i][j]) * dvzdz[i][j] + lambda[i][j] * dvxdx[i][j]);
-    sxz[i][j] += dt * (mu[i][j] * (dvxdz[i][j] + dvzdx[i][j]));
+    devij2;
+    sxx[i][j] += dt * ((lambda[i0][j] + 2 * mu[i0][j]) * dvxdx[i][j] + lambda[i0][j] * dvzdz[i][j]);
+    szz[i][j] += dt * ((lambda[i0][j] + 2 * mu[i0][j]) * dvzdz[i][j] + lambda[i0][j] * dvxdx[i][j]);
+    sxz[i][j] += dt * (mu[i0][j] * (dvxdz[i][j] + dvzdx[i][j]));
 }
 __global__ void updateU(float **u, float **v, float dt){
-    devij;
+    int i = blockIdx.x+blockDim.x*blockIdx.y, j = threadIdx.x;
     u[i][j] += v[i][j] * dt;
 }
 __global__ void interactionRhoY(float **K_rho, float **vy, float **vy_fw, float tsfe){
-    devij;
-    K_rho[i][j] -= vy_fw[i][j] * vy[i][j] * tsfe;
+    devij2;
+    K_rho[i0][j] -= vy_fw[i][j] * vy[i][j] * tsfe;
 }
 __global__ void interactionRhoXZ(float **K_rho, float **vx, float **vx_fw, float **vz, float **vz_fw, float tsfe){
-    devij;
-    K_rho[i][j] -= (vx_fw[i][j] * vx[i][j] + vz_fw[i][j] * vz[i][j]) * tsfe;
+    devij2;
+    K_rho[i0][j] -= (vx_fw[i][j] * vx[i][j] + vz_fw[i][j] * vz[i][j]) * tsfe;
 }
 __global__ void interactionMuY(float **K_mu, float **dvydx, float **dvydx_fw, float **dvydz, float **dvydz_fw, float tsfe){
-    devij;
-    K_mu[i][j] -= (dvydx[i][j] * dvydx_fw[i][j] + dvydz[i][j] * dvydz_fw[i][j]) * tsfe;
+    devij2;
+    K_mu[i0][j] -= (dvydx[i][j] * dvydx_fw[i][j] + dvydz[i][j] * dvydz_fw[i][j]) * tsfe;
 }
 __global__ void interactionMuXZ(float **K_mu, float **dvxdx, float **dvxdx_fw, float **dvxdz, float **dvxdz_fw,
     float **dvzdx, float **dvzdx_fw, float **dvzdz, float **dvzdz_fw, float tsfe){
-    devij;
-    K_mu[i][j] -= (2 * dvxdx[i][j] * dvxdx_fw[i][j] + 2 * dvzdz[i][j] * dvzdz_fw[i][j] +
+    devij2;
+    K_mu[i0][j] -= (2 * dvxdx[i][j] * dvxdx_fw[i][j] + 2 * dvzdz[i][j] * dvzdz_fw[i][j] +
         (dvxdz[i][j] + dvzdx[i][j]) * (dvzdx_fw[i][j] + dvxdz_fw[i][j])) * tsfe;
 }
 __global__ void interactionLambdaXZ(float **K_lambda, float **dvxdx, float **dvxdx_fw, float **dvzdz, float **dvzdz_fw, float tsfe){
-    devij;
-    K_lambda[i][j] -= ((dvxdx[i][j] + dvzdz[i][j]) * (dvxdx_fw[i][j] + dvzdz_fw[i][j])) * tsfe;
+    devij2;
+    K_lambda[i0][j] -= ((dvxdx[i][j] + dvzdz[i][j]) * (dvxdx_fw[i][j] + dvzdz_fw[i][j])) * tsfe;
 }
 
 __device__ float gaussian(int x, int sigma){
@@ -716,14 +723,15 @@ __global__ void initialiseAbsorbingBoundaries(float **absbound, float width,
         }
     }
 }
-__global__ void prepareAdjointSTF(float **adstf, float **u_syn, float ***u_obs, float *tw, int nt, int isrc){
+__global__ void prepareAdjointSTF(float **adstf, float **u_syn, float ***u_obs, float *tw, int nt, int isrc, int j){
     int it = blockIdx.x;
     int irec = threadIdx.x;
-    adstf[irec][nt - it - 1] = (u_syn[irec][it] - u_obs[isrc][irec][it]) * tw[it] * 2;
+    int jnt = j * nt;
+    adstf[irec][nt - it - 1 + jnt] = (u_syn[irec][it + jnt] - u_obs[isrc+j][irec][it]) * tw[it] * 2;
 }
-__global__ void prepareEnvelopeSTF(float **adstf, float *etmp, float *syn, float *ersd, int nt, int irec){
+__global__ void prepareEnvelopeSTF(float **adstf, float *etmp, float *syn, float *ersd, int nt, int irec, int jnt){
     int it = blockIdx.x;
-    adstf[irec][nt - it - 1] = etmp[it] * syn[it] - ersd[it];
+    adstf[irec][nt - it - 1 + jnt] = etmp[it] * syn[it] - ersd[it];
 }
 __global__ void filterKernelX(float **model, float **gtemp, int nx, int sigma){
     devij;
@@ -760,9 +768,9 @@ __global__ void getTaperWeights(float *tw, float dt, int nt){
         tw[it] = 1;
     }
 }
-__global__ void calculateMisfit(float *misfit, float **u_syn, float ***u_obs, float *tw, float dt, int isrc, int irec){
+__global__ void calculateMisfit(float *misfit, float **u_syn, float ***u_obs, float *tw, float dt, int isrc, int irec, int j, int nt){
     int it = blockIdx.x;
-    float wavedif = (u_syn[irec][it] - u_obs[isrc][irec][it]) * tw[it];
+    float wavedif = (u_syn[irec][it+j*nt] - u_obs[isrc+j][irec][it]) * tw[it];
     misfit[it] = wavedif * dt;
 }
 __global__ void envelopetmp(float *etmp, float *esyn, float *eobs, float max){
@@ -773,9 +781,9 @@ __global__ void copyWaveform(float *misfit, float ***u_obs, int isrc, int irec){
     int it = blockIdx.x;
     misfit[it] = u_obs[isrc][irec][it];
 }
-__global__ void copyWaveform(float *misfit, float **out, int irec){
+__global__ void copyWaveform(float *misfit, float **out, int irec, int jnt){
     int it = blockIdx.x;
-    misfit[it] = out[irec][it];
+    misfit[it] = out[irec][it+jnt];
 }
 __global__ void initialiseGrids(float **X, float **Z, float Lx, int nx, float Lz, int nz){
     devij;
@@ -911,6 +919,15 @@ __global__ void copyC2Abs(float *a, cufftComplex *b, int n){
     a[i] = sqrt(b[i].x*b[i].x + b[i].y*b[i].y) / n;
 }
 
+static int getTaskIndex(int isrc){
+    int index = isrc + ntask - 1;
+    if(index >= nsrc){
+        return nsrc - 1;
+    }
+    else{
+        return index;
+    }
+}
 static float calculateAngle(float **p, float **g, float k, int nx, int nz){
     float xx = mat::dot(p, p, nx, nz);
     float yy = mat::dot(g, g, nx, nz);
@@ -1055,25 +1072,26 @@ static float str2float(const char *str){
 static int str2int(const char *str){
     return lroundf(str2float(str));
 }
-static void printStat(int a, int b){
-    a++;
-    if(b >= 100){
-        if(a < 10){
-            printf("  task 00%d of %d\n", a, b);
-            return;
+static void printStat(int i, int b){
+    for(int a=i+1; a<=getTaskIndex(i)+1; a++){
+        if(b >= 100){
+            if(a < 10){
+                printf("  task 00%d of %d\n", a, b);
+                continue;
+            }
+            if(a < 100){
+                printf("  task 0%d of %d\n", a, b);
+                continue;
+            }
         }
-        if(a < 100){
-            printf("  task 0%d of %d\n", a, b);
-            return;
+        else if(b >= 10){
+            if(a < 10){
+                printf("  task 0%d of %d\n", a, b);
+                continue;
+            }
         }
+        printf("  task %d of %d\n", a, b);
     }
-    else if(b >= 10){
-        if(a < 10){
-            printf("  task 0%d of %d\n", a, b);
-            return;
-        }
-    }
-    printf("  task %d of %d\n", a, b);
 }
 static int getFileLength(FILE *file){
     fseek (file, 0, SEEK_END);
@@ -1109,6 +1127,7 @@ static void initialiseModel(const char *model_dir){
     }
     dat::nx = lroundf(sqrt(npt * dat::Lx / dat::Lz));
     dat::nz = lroundf(npt / dat::nx);
+    dat::nx2 = dat::nx * ntask;
 
     // dat::nx *= 2;
     // dat::nz *= 2;
@@ -1158,6 +1177,9 @@ static void readFortran(const char *fname, int isrc){
                         }
                         else if(strcmp(key, "obs_type") == 0){
                             dat::obs_type = str2int(value);
+                        }
+                        else if(strcmp(key, "ntask") == 0){
+                            dat::ntask = str2int(value);
                         }
                         else if(strcmp(key, "misfit_type") == 0){
                             dat::misfit_type = str2int(value);
@@ -1391,6 +1413,7 @@ static int importData(const char *datapath){
     dat::wave_propagation_sh = 1;
     dat::wave_propagation_psv = 0;
     dat::obs_type = 0;
+    dat::ntask = 1;
     dat::misfit_type = 0;
     dat::parametrisation = 1;
     dat::obs_su = 0;
@@ -1530,8 +1553,10 @@ static int importData(const char *datapath){
 
     {
         int adjoint = (dat::simulation_mode != 1);
-        dat::nxb = dim3(nx, nbt);
-        dat::nzt = dim3(nz / nbt);
+        dat::nxb = dim3(nx, 1);
+        dat::nxb2 = dim3(nx, ntask);
+        dat::nzt = dim3(nz);
+        dat::isrc = mat::createIntHost(2);
 
         dat::X = mat::create(nx, nz);
         dat::Z = mat::create(nx, nz);
@@ -1544,39 +1569,39 @@ static int importData(const char *datapath){
 
 
         if(sh){
-            dat::vy = mat::create(nx, nz);
-            dat::uy = mat::create(nx, nz);
-            dat::sxy = mat::create(nx, nz);
-            dat::szy = mat::create(nx, nz);
-            dat::dsy = mat::create(nx, nz);
-            dat::dvydx = mat::create(nx, nz);
-            dat::dvydz = mat::create(nx, nz);
+            dat::vy = mat::create(nx2, nz);
+            dat::uy = mat::create(nx2, nz);
+            dat::sxy = mat::create(nx2, nz);
+            dat::szy = mat::create(nx2, nz);
+            dat::dsy = mat::create(nx2, nz);
+            dat::dvydx = mat::create(nx2, nz);
+            dat::dvydz = mat::create(nx2, nz);
 
-            dat::out_y = mat::create(nrec, nt);
-            dat::uy_forward = mat::createHost(dat::nsfe, nx, nz);
-            dat::vy_forward = mat::createHost(dat::nsfe, nx, nz);
+            dat::out_y = mat::create(nrec, nt * ntask);
+            dat::uy_forward = mat::createHost(dat::nsfe, nx2, nz);
+            dat::vy_forward = mat::createHost(dat::nsfe, nx2, nz);
         }
         if(psv){
-            dat::vx = mat::create(nx, nz);
-            dat::vz = mat::create(nx, nz);
-            dat::ux = mat::create(nx, nz);
-            dat::uz = mat::create(nx, nz);
-            dat::sxx = mat::create(nx, nz);
-            dat::szz = mat::create(nx, nz);
-            dat::sxz = mat::create(nx, nz);
-            dat::dsx = mat::create(nx, nz);
-            dat::dsz = mat::create(nx, nz);
-            dat::dvxdx = mat::create(nx, nz);
-            dat::dvxdz = mat::create(nx, nz);
-            dat::dvzdx = mat::create(nx, nz);
-            dat::dvzdz = mat::create(nx, nz);
+            dat::vx = mat::create(nx2, nz);
+            dat::vz = mat::create(nx2, nz);
+            dat::ux = mat::create(nx2, nz);
+            dat::uz = mat::create(nx2, nz);
+            dat::sxx = mat::create(nx2, nz);
+            dat::szz = mat::create(nx2, nz);
+            dat::sxz = mat::create(nx2, nz);
+            dat::dsx = mat::create(nx2, nz);
+            dat::dsz = mat::create(nx2, nz);
+            dat::dvxdx = mat::create(nx2, nz);
+            dat::dvxdz = mat::create(nx2, nz);
+            dat::dvzdx = mat::create(nx2, nz);
+            dat::dvzdz = mat::create(nx2, nz);
 
-            dat::out_x = mat::create(nrec, nt);
-            dat::out_z = mat::create(nrec, nt);
-            dat::ux_forward = mat::createHost(dat::nsfe, nx, nz);
-            dat::uz_forward = mat::createHost(dat::nsfe, nx, nz);
-            dat::vx_forward = mat::createHost(dat::nsfe, nx, nz);
-            dat::vz_forward = mat::createHost(dat::nsfe, nx, nz);
+            dat::out_x = mat::create(nrec, nt * ntask);
+            dat::out_z = mat::create(nrec, nt * ntask);
+            dat::ux_forward = mat::createHost(dat::nsfe, nx2, nz);
+            dat::uz_forward = mat::createHost(dat::nsfe, nx2, nz);
+            dat::vx_forward = mat::createHost(dat::nsfe, nx2, nz);
+            dat::vz_forward = mat::createHost(dat::nsfe, nx2, nz);
         }
 
         dat::lambda = mat::create(nx, nz);
@@ -1590,16 +1615,16 @@ static int importData(const char *datapath){
 
         if(adjoint){
             if(sh){
-                dat::dvydx_fw = mat::create(nx, nz);
-                dat::dvydz_fw = mat::create(nx, nz);
+                dat::dvydx_fw = mat::create(nx2, nz);
+                dat::dvydz_fw = mat::create(nx2, nz);
 
                 dat::u_obs_y = mat::create(nsrc, nrec, nt);
             }
             if(psv){
-                dat::dvxdx_fw = mat::create(nx, nz);
-                dat::dvxdz_fw = mat::create(nx, nz);
-                dat::dvzdx_fw = mat::create(nx, nz);
-                dat::dvzdz_fw = mat::create(nx, nz);
+                dat::dvxdx_fw = mat::create(nx2, nz);
+                dat::dvxdz_fw = mat::create(nx2, nz);
+                dat::dvzdx_fw = mat::create(nx2, nz);
+                dat::dvzdz_fw = mat::create(nx2, nz);
 
                 dat::u_obs_x = mat::create(nsrc, nrec, nt);
                 dat::u_obs_z = mat::create(nsrc, nrec, nt);
@@ -1609,9 +1634,9 @@ static int importData(const char *datapath){
             dat::K_mu = mat::create(nx, nz);
             dat::K_rho = mat::create(nx, nz);
 
-            dat::adstf_x = mat::create(nrec, nt);
-            dat::adstf_y = mat::create(nrec, nt);
-            dat::adstf_z = mat::create(nrec, nt);
+            dat::adstf_x = mat::create(nrec, nt*ntask);
+            dat::adstf_y = mat::create(nrec, nt*ntask);
+            dat::adstf_z = mat::create(nrec, nt*ntask);
         }
 
         dat::src_x_id = mat::createInt(nsrc);
@@ -1747,7 +1772,7 @@ static void checkMemoryUsage(){
     float total_db = (float)total_byte ;
     float used_db = total_db - free_db ;
 
-    printf("memory usage: %.1fMB / %.1fMB\n", used_db / 1024.0 / 1024.0, total_db / 1024.0 / 1024.0);
+    printf("Memory usage: %.1fMB / %.1fMB\n", used_db / 1024.0 / 1024.0, total_db / 1024.0 / 1024.0);
 }
 static void applyGaussian(float **p, int sigma){
     float **gsum = mat::create(nx, nz);
@@ -2022,19 +2047,19 @@ static void prepareSTF(){
 }
 static void initialiseDynamicFields(){
     if(sh){
-        mat::init(dat::vy, 0, nx, nz);
-        mat::init(dat::uy, 0, nx, nz);
-        mat::init(dat::sxy, 0, nx, nz);
-        mat::init(dat::szy, 0, nx, nz);
+        mat::init(dat::vy, 0, nx2, nz);
+        mat::init(dat::uy, 0, nx2, nz);
+        mat::init(dat::sxy, 0, nx2, nz);
+        mat::init(dat::szy, 0, nx2, nz);
     }
     if(psv){
-        mat::init(dat::vx, 0, nx, nz);
-        mat::init(dat::vz, 0, nx, nz);
-        mat::init(dat::ux, 0, nx, nz);
-        mat::init(dat::uz, 0, nx, nz);
-        mat::init(dat::sxx, 0, nx, nz);
-        mat::init(dat::szz, 0, nx, nz);
-        mat::init(dat::sxz, 0, nx, nz);
+        mat::init(dat::vx, 0, nx2, nz);
+        mat::init(dat::vz, 0, nx2, nz);
+        mat::init(dat::ux, 0, nx2, nz);
+        mat::init(dat::uz, 0, nx2, nz);
+        mat::init(dat::sxx, 0, nx2, nz);
+        mat::init(dat::szz, 0, nx2, nz);
+        mat::init(dat::sxz, 0, nx2, nz);
     }
 }
 static void initialiseKernels(){
@@ -2045,79 +2070,80 @@ static void initialiseKernels(){
 static void runWaveFieldPropagation(){
     initialiseDynamicFields();
 
+    int ntask2 = dat::isrc[1]-dat::isrc[0]+1;
     for(int it = 0; it < nt; it++){
         if(mode == 0){
             if((it + 1) % dat::sfe == 0){
                 int isfe = dat::nsfe - (it + 1) / dat::sfe;
                 if(sh){
-                    mat::copyDeviceToHost(dat::uy_forward[isfe], dat::uy, nx, nz);
+                    mat::copyDeviceToHost(dat::uy_forward[isfe], dat::uy, nx2, nz);
                 }
                 if(psv){
-                    mat::copyDeviceToHost(dat::ux_forward[isfe], dat::ux, nx, nz);
-                    mat::copyDeviceToHost(dat::uz_forward[isfe], dat::uz, nx, nz);
+                    mat::copyDeviceToHost(dat::ux_forward[isfe], dat::ux, nx2, nz);
+                    mat::copyDeviceToHost(dat::uz_forward[isfe], dat::uz, nx2, nz);
                 }
             }
         }
 
         if(sh){
-            divSY<<<nxb, nzt>>>(dat::dsy, dat::sxy, dat::szy, dat::X, dat::Z, nx, nz);
+            divSY<<<nxb2, nzt>>>(dat::dsy, dat::sxy, dat::szy, dat::X, dat::Z, nx, nz);
         }
         if(psv){
-            divSXZ<<<nxb, nzt>>>(dat::dsx, dat::dsz, dat::sxx, dat::szz, dat::sxz, dat::X, dat::Z, nx, nz);
+            divSXZ<<<nxb2, nzt>>>(dat::dsx, dat::dsz, dat::sxx, dat::szz, dat::sxz, dat::X, dat::Z, nx, nz);
         }
         if(mode == 0){
-            addSTF<<<nsrc, 1>>>(
+            addSTF<<<nsrc, ntask2>>>(
                 dat::dsx, dat::dsy, dat::dsz, dat::stf_x, dat::stf_y, dat::stf_z,
-                dat::src_x_id, dat::src_z_id, dat::isrc, sh, psv, it
+                dat::src_x_id, dat::src_z_id, dat::isrc[0], sh, psv, it, nx, 0
             );
         }
         else if(mode == 1){
-            addSTF<<<nrec, 1>>>(
+            addSTF<<<nrec, ntask2>>>(
                 dat::dsx, dat::dsy, dat::dsz, dat::adstf_x, dat::adstf_y, dat::adstf_z,
-                dat::rec_x_id, dat::rec_z_id, -1, sh, psv, it
+                dat::rec_x_id, dat::rec_z_id, -1, sh, psv, it, nx, nt
             );
         }
         if(sh){
-            updateV<<<nxb, nzt>>>(dat::vy, dat::dsy, dat::rho, dat::absbound, dt);
-            divVY<<<nxb, nzt>>>(dat::dvydx, dat::dvydz, dat::vy, dat::X, dat::Z, nx, nz);
-            updateSY<<<nxb, nzt>>>(dat::sxy, dat::szy, dat::dvydx, dat::dvydz, dat::mu, dt);
-            updateU<<<nxb, nzt>>>(dat::uy, dat::vy, dt);
+            updateV<<<nxb2, nzt>>>(dat::vy, dat::dsy, dat::rho, dat::absbound, dt);
+            divVY<<<nxb2, nzt>>>(dat::dvydx, dat::dvydz, dat::vy, dat::X, dat::Z, nx, nz);
+            updateSY<<<nxb2, nzt>>>(dat::sxy, dat::szy, dat::dvydx, dat::dvydz, dat::mu, dt);
+            updateU<<<nxb2, nzt>>>(dat::uy, dat::vy, dt);
         }
         if(psv){
-            updateV<<<nxb, nzt>>>(dat::vx, dat::dsx, dat::rho, dat::absbound, dt);
-            updateV<<<nxb, nzt>>>(dat::vz, dat::dsz, dat::rho, dat::absbound, dt);
-            divVXZ<<<nxb, nzt>>>(dat::dvxdx, dat::dvxdz, dat::dvzdx, dat::dvzdz, dat::vx, dat::vz, dat::X, dat::Z, nx, nz);
-            updateSXZ<<<nxb, nzt>>>(dat::sxx, dat::szz, dat::sxz, dat::dvxdx, dat::dvxdz, dat::dvzdx, dat::dvzdz, dat::lambda, dat::mu, dt);
-            updateU<<<nxb, nzt>>>(dat::ux, dat::vx, dt);
-            updateU<<<nxb, nzt>>>(dat::uz, dat::vz, dt);
+            updateV<<<nxb2, nzt>>>(dat::vx, dat::dsx, dat::rho, dat::absbound, dt);
+            updateV<<<nxb2, nzt>>>(dat::vz, dat::dsz, dat::rho, dat::absbound, dt);
+            divVXZ<<<nxb2, nzt>>>(dat::dvxdx, dat::dvxdz, dat::dvzdx, dat::dvzdz, dat::vx, dat::vz, dat::X, dat::Z, nx, nz);
+            updateSXZ<<<nxb2, nzt>>>(dat::sxx, dat::szz, dat::sxz, dat::dvxdx, dat::dvxdz, dat::dvzdx, dat::dvzdz, dat::lambda, dat::mu, dt);
+            updateU<<<nxb2, nzt>>>(dat::ux, dat::vx, dt);
+            updateU<<<nxb2, nzt>>>(dat::uz, dat::vz, dt);
         }
         if(mode == 0){
             if(dat::obs_type == 0){
-                saveRec<<<nrec, 1>>>(
+                saveRec<<<nrec, ntask2>>>(
                     dat::out_x, dat::out_y, dat::out_z, dat::vx, dat::vy, dat::vz,
-                    dat::rec_x_id, dat::rec_z_id, sh, psv, it
+                    dat::rec_x_id, dat::rec_z_id, nx, nt, sh, psv, it
                 );
             }
             else if(dat::obs_type == 1){
-                saveRec<<<nrec, 1>>>(
+                saveRec<<<nrec, ntask2>>>(
                     dat::out_x, dat::out_y, dat::out_z, dat::ux, dat::uy, dat::uz,
-                    dat::rec_x_id, dat::rec_z_id, sh, psv, it
+                    dat::rec_x_id, dat::rec_z_id, nx, nt, sh, psv, it
                 );
             }
-            else if(dat::obs_type == 2 && dat::isrc >= 0){
-                saveRec<<<nrec, 1>>>(
+            else if(dat::obs_type == 2 && dat::isrc[0] >= 0){
+                saveRec<<<nrec, ntask2>>>(
                     dat::u_obs_x, dat::u_obs_y, dat::u_obs_z, dat::ux, dat::uy, dat::uz,
-                    dat::rec_x_id, dat::rec_z_id, dat::isrc, sh, psv, it
+                    dat::rec_x_id, dat::rec_z_id, dat::isrc[0], nx, sh, psv, it
                 );
             }
             if((it + 1) % dat::sfe == 0){
                 int isfe = dat::nsfe - (it + 1) / dat::sfe;
                 if(sh){
-                    mat::copyDeviceToHost(dat::vy_forward[isfe], dat::vy, nx, nz);
+                    mat::copyDeviceToHost(dat::vy_forward[isfe], dat::vy, nx2, nz);
                 }
                 if(psv){
-                    mat::copyDeviceToHost(dat::vx_forward[isfe], dat::vx, nx, nz);
-                    mat::copyDeviceToHost(dat::vz_forward[isfe], dat::vz, nx, nz);
+                    mat::copyDeviceToHost(dat::vx_forward[isfe], dat::vx, nx2, nz);
+                    mat::copyDeviceToHost(dat::vz_forward[isfe], dat::vz, nx2, nz);
                 }
             }
         }
@@ -2127,41 +2153,42 @@ static void runWaveFieldPropagation(){
                 int isfe = (it + dat::sfe) / dat::sfe - 1;
                 float tsfe = dat::sfe * dt;
                 if(sh){
-                    mat::copyHostToDevice(dat::dsy, dat::uy_forward[isfe], nx, nz);
-                    divVY<<<nxb, nzt>>>(dat::dvydx, dat::dvydz, dat::uy, dat::X, dat::Z, nx, nz);
-                    divVY<<<nxb, nzt>>>(dat::dvydx_fw, dat::dvydz_fw, dat::dsy, dat::X, dat::Z, nx, nz);
-                    mat::copyHostToDevice(dat::dsy, dat::vy_forward[isfe], nx, nz);
-                    interactionRhoY<<<nxb, nzt>>>(dat::K_rho, dat::vy, dat::dsy, tsfe);
-                    interactionMuY<<<nxb, nzt>>>(dat::K_mu, dat::dvydx, dat::dvydx_fw, dat::dvydz, dat::dvydz_fw, tsfe);
+                    mat::copyHostToDevice(dat::dsy, dat::uy_forward[isfe], nx2, nz);
+                    divVY<<<nxb2, nzt>>>(dat::dvydx, dat::dvydz, dat::uy, dat::X, dat::Z, nx, nz);
+                    divVY<<<nxb2, nzt>>>(dat::dvydx_fw, dat::dvydz_fw, dat::dsy, dat::X, dat::Z, nx, nz);
+                    mat::copyHostToDevice(dat::dsy, dat::vy_forward[isfe], nx2, nz);
+                    interactionRhoY<<<nxb2, nzt>>>(dat::K_rho, dat::vy, dat::dsy, tsfe);
+                    interactionMuY<<<nxb2, nzt>>>(dat::K_mu, dat::dvydx, dat::dvydx_fw, dat::dvydz, dat::dvydz_fw, tsfe);
                 }
                 if(psv){
-                    mat::copyHostToDevice(dat::dsx, dat::ux_forward[isfe], nx, nz);
-                    mat::copyHostToDevice(dat::dsz, dat::uz_forward[isfe], nx, nz);
-                    divVXZ<<<nxb, nzt>>>(
+                    mat::copyHostToDevice(dat::dsx, dat::ux_forward[isfe], nx2, nz);
+                    mat::copyHostToDevice(dat::dsz, dat::uz_forward[isfe], nx2, nz);
+                    divVXZ<<<nxb2, nzt>>>(
                         dat::dvxdx, dat::dvxdz, dat::dvzdx, dat::dvzdz,
                         dat::ux, dat::uz, dat::X, dat::Z, nx, nz
                     );
-                    divVXZ<<<nxb, nzt>>>(
+                    divVXZ<<<nxb2, nzt>>>(
                         dat::dvxdx_fw, dat::dvxdz_fw, dat::dvzdx_fw, dat::dvzdz_fw,
                         dat::dsx, dat::dsz, dat::X, dat::Z, nx, nz
                     );
 
-                    mat::copyHostToDevice(dat::dsx, dat::vx_forward[isfe], nx, nz);
-                    mat::copyHostToDevice(dat::dsz, dat::vz_forward[isfe], nx, nz);
-                    interactionRhoXZ<<<nxb, nzt>>>(dat::K_rho, dat::vx, dat::dsx, dat::vz, dat::dsz, tsfe);
-                    interactionMuXZ<<<nxb, nzt>>>(
+                    mat::copyHostToDevice(dat::dsx, dat::vx_forward[isfe], nx2, nz);
+                    mat::copyHostToDevice(dat::dsz, dat::vz_forward[isfe], nx2, nz);
+                    interactionRhoXZ<<<nxb2, nzt>>>(dat::K_rho, dat::vx, dat::dsx, dat::vz, dat::dsz, tsfe);
+                    interactionMuXZ<<<nxb2, nzt>>>(
                         dat::K_mu, dat::dvxdx, dat::dvxdx_fw, dat::dvxdz, dat::dvxdz_fw,
                         dat::dvzdx, dat::dvzdx_fw, dat::dvzdz, dat::dvzdz_fw, tsfe
                     );
-                    interactionLambdaXZ<<<nxb, nzt>>>(dat::K_lambda, dat::dvxdx, dat::dvxdx_fw, dat::dvzdz, dat::dvzdz_fw, tsfe);
+                    interactionLambdaXZ<<<nxb2, nzt>>>(dat::K_lambda, dat::dvxdx, dat::dvxdx_fw, dat::dvzdz, dat::dvzdz_fw, tsfe);
                 }
             }
         }
     }
 }
-static void runForward(int isrc){
+static void runForward(int isrc0, int isrc1){
     dat::simulation_mode = 0;
-    dat::isrc = isrc;
+    dat::isrc[0] = isrc0;
+    dat::isrc[1] = isrc1;
     runWaveFieldPropagation();
 }
 static void runAdjoint(int init_kernel){
@@ -2193,8 +2220,8 @@ static void prepareObs(){
     else{
         printf("Generating observed data\n");
         loadModel(dat::model_true);
-        for(int isrc = 0; isrc < nsrc; isrc++){
-            runForward(isrc);
+        for(int isrc = 0; isrc < nsrc; isrc += ntask){
+            runForward(isrc, getTaskIndex(isrc));
             printStat(isrc, nsrc);
         }
     }
@@ -2202,10 +2229,11 @@ static void prepareObs(){
     dat::obs_type = 1;
 }
 static float calculateEnvelopeMisfit(float **adstf, float *d_misfit, float **out, float ***u_obs,
-    cufftComplex *syn, cufftComplex *obs, float *esyn, float *eobs, float *ersd, float *etmp, float dt, int isrc, int irec){
-    copyWaveform<<<nt, 1>>>(d_misfit, u_obs, isrc, irec);
+    cufftComplex *syn, cufftComplex *obs, float *esyn, float *eobs, float *ersd, float *etmp,
+    float dt, int isrc, int irec, int j, int nt){
+    copyWaveform<<<nt, 1>>>(d_misfit, u_obs, isrc+j, irec);
     hilbert(d_misfit, obs);
-    copyWaveform<<<nt, 1>>>(d_misfit, out, irec);
+    copyWaveform<<<nt, 1>>>(d_misfit, out, irec, j*nt);
     hilbert(d_misfit, syn);
 
     copyC2Abs<<<nt, 1>>>(esyn, syn, nt);
@@ -2218,7 +2246,7 @@ static float calculateEnvelopeMisfit(float **adstf, float *d_misfit, float **out
     hilbert(ersd, obs);
     copyC2Imag<<<nt, 1>>>(ersd, obs, nt);
 
-    prepareEnvelopeSTF<<<nt, 1>>>(adstf, etmp, d_misfit, ersd, nt, irec);
+    prepareEnvelopeSTF<<<nt, 1>>>(adstf, etmp, d_misfit, ersd, nt, irec, j*nt);
     mat::calc(ersd, 1, esyn, -1, eobs, nt);
     return mat::norm(ersd, nt);
 }
@@ -2244,52 +2272,56 @@ static float computeKernelsAndMisfit(int kernel){
         printf("Computing gradient\n");
         initialiseKernels();
     }
-    for(int isrc = 0; isrc < nsrc; isrc++){
-        runForward(isrc);
-        for(int irec = 0; irec < nrec; irec++){
-            if(dat::misfit_type == 1){
-                if(sh){
-                    misfit += calculateEnvelopeMisfit(dat::adstf_y, d_misfit, dat::out_y, dat::u_obs_y,
-                        syn, obs, esyn, eobs, ersd, etmp, dt, isrc, irec);
+    for(int isrc = 0; isrc < nsrc; isrc+=ntask){
+        int jsrc = getTaskIndex(isrc);
+        runForward(isrc, jsrc);
+        for(int j = 0; j <= jsrc - isrc; j++){
+            for(int irec = 0; irec < nrec; irec++){
+                if(dat::misfit_type == 1){
+                    if(sh){
+                        misfit += calculateEnvelopeMisfit(dat::adstf_y, d_misfit, dat::out_y, dat::u_obs_y,
+                            syn, obs, esyn, eobs, ersd, etmp, dt, isrc, irec, j, nt);
+                    }
+                    if(psv){
+                        misfit += calculateEnvelopeMisfit(dat::adstf_x, d_misfit, dat::out_x, dat::u_obs_x,
+                            syn, obs, esyn, eobs, ersd, etmp, dt, isrc, irec, j, nt);
+                        misfit += calculateEnvelopeMisfit(dat::adstf_z, d_misfit, dat::out_z, dat::u_obs_z,
+                            syn, obs, esyn, eobs, ersd, etmp, dt, isrc, irec, j, nt);
+                    }
                 }
-                if(psv){
-                    misfit += calculateEnvelopeMisfit(dat::adstf_x, d_misfit, dat::out_x, dat::u_obs_x,
-                        syn, obs, esyn, eobs, ersd, etmp, dt, isrc, irec);
-                    misfit += calculateEnvelopeMisfit(dat::adstf_z, d_misfit, dat::out_z, dat::u_obs_z,
-                        syn, obs, esyn, eobs, ersd, etmp, dt, isrc, irec);
+                else{
+                    if(sh){
+                        calculateMisfit<<<nt, 1>>>(d_misfit, dat::out_y, dat::u_obs_y, dat::tw, sqrt(dt), isrc, irec, j, nt);
+                        misfit += mat::norm(d_misfit, nt);
+                    }
+                    if(psv){
+                        calculateMisfit<<<nt, 1>>>(d_misfit, dat::out_x, dat::u_obs_x, dat::tw, sqrt(dt), isrc, irec, j, nt);
+                        misfit += mat::norm(d_misfit, nt);
+                        calculateMisfit<<<nt, 1>>>(d_misfit, dat::out_z, dat::u_obs_z, dat::tw, sqrt(dt), isrc, irec, j, nt);
+                        misfit += mat::norm(d_misfit, nt);
+                    }
                 }
             }
-            else{
-                if(sh){
-                    calculateMisfit<<<nt, 1>>>(d_misfit, dat::out_y, dat::u_obs_y, dat::tw, sqrt(dt), isrc, irec);
-                    misfit += mat::norm(d_misfit, nt);
-                }
-                if(psv){
-                    calculateMisfit<<<nt, 1>>>(d_misfit, dat::out_x, dat::u_obs_x, dat::tw, sqrt(dt), isrc, irec);
-                    misfit += mat::norm(d_misfit, nt);
-                    calculateMisfit<<<nt, 1>>>(d_misfit, dat::out_z, dat::u_obs_z, dat::tw, sqrt(dt), isrc, irec);
-                    misfit += mat::norm(d_misfit, nt);
-                }
-            }
-        }
-        if(kernel){
+            // merge above: later
             if(dat::misfit_type != 1){
                 if(sh){
-                    prepareAdjointSTF<<<nt, nrec>>>(dat::adstf_y, dat::out_y, dat::u_obs_y, dat::tw, nt, isrc);
+                    prepareAdjointSTF<<<nt, nrec>>>(dat::adstf_y, dat::out_y, dat::u_obs_y, dat::tw, nt, isrc, j);
                     if(!sh){
                         mat::init(dat::adstf_x, 0, nrec, nt);
                         mat::init(dat::adstf_z, 0, nrec, nt);
                     }
                 }
                 if(psv){
-                    prepareAdjointSTF<<<nt, nrec>>>(dat::adstf_x, dat::out_x, dat::u_obs_x, dat::tw, nt, isrc);
-                    prepareAdjointSTF<<<nt, nrec>>>(dat::adstf_z, dat::out_z, dat::u_obs_z, dat::tw, nt, isrc);
+                    prepareAdjointSTF<<<nt, nrec>>>(dat::adstf_x, dat::out_x, dat::u_obs_x, dat::tw, nt, isrc, j);
+                    prepareAdjointSTF<<<nt, nrec>>>(dat::adstf_z, dat::out_z, dat::u_obs_z, dat::tw, nt, isrc, j);
                     if(!sh){
                         mat::init(dat::adstf_y, 0, nrec, nt);
                     }
                 }
             }
+        }
 
+        if(kernel){
             runAdjoint(0);
             printStat(isrc, nsrc);
         }
@@ -2316,7 +2348,7 @@ static float computeKernelsAndMisfit(int kernel){
         }
     }
 
-    return misfit / dat::misfit_ref;
+    return misfit;
 }
 static float calculateMisfit(){
     return computeKernelsAndMisfit(0);
@@ -2676,21 +2708,21 @@ static void lineSearch(float **m, float **g, float **p, float f){
             alpha = calculateStep(step_count, step_len_max, &status);
         }
         if(step_count < 10){
-            fprintf(dat::log_ls, "  step 0%d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]);
-            printf("  step 0%d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]);
+            fprintf(dat::log_ls, "  step 0%d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
+            printf("  step 0%d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
         }
         else{
-            fprintf(dat::log_ls, "  step %d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]);
-            printf("  step %d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]);
+            fprintf(dat::log_ls, "  step %d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
+            printf("  step %d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
         }
         if(status > 0){
-            fprintf(dat::log_ls, "  alpha = %.2e\n\n", alpha);
+            fprintf(dat::log_ls, "  alpha = %.2e\n", alpha);
             printf("  alpha = %.2e\n", alpha);
             float angle =  calculateAngle(p, g, -1, nx, nz)*180/pi;
-            fprintf(dat::log_ls, "  angle = %f\n", angle);
+            fprintf(dat::log_ls, "  angle = %f\n\n", angle);
             printf("  angle = %f\n", angle);
             updateModel(m, p, alpha, alpha_old);
-            fprintf(dat::log_misfit, "%d %f\n", dat::neval, dat::func_vals[argmin(dat::func_vals, dat::ls_count)]);
+            fprintf(dat::log_misfit, "%d %f\n", dat::neval, dat::func_vals[argmin(dat::func_vals, dat::ls_count)]/dat::misfit_ref);
             return;
         }
         else if(status < 0){
@@ -2713,6 +2745,8 @@ static void inversionRoutine(){
     cusolverDnCreate(&solver_handle);
     if(dat::misfit_type == 1){
         cufftPlan1d(&cufft_handle, nt, CUFFT_C2C, 1);
+    }
+    if(dat::optimize == 1){
         dat::lbfgs_used = 0;
     }
 
@@ -2773,13 +2807,13 @@ static void inversionRoutine(){
     dat::ls_count = 0;
     dat::inv_count = 0;
 
+    clock_t timestart = clock();
     for(int iter = 0; iter < dat::inv_iteration; iter++){
         fprintf(dat::log_ls, "iteration %d / %d\n", iter + 1, dat::inv_iteration);
         printf("\n\nStarting iteration %d / %d\n", iter + 1, dat::inv_iteration);
         float f = computeKernels();
         if(iter == 0){
             dat::misfit_ref = f;
-            f = 1;
         }
         dat::neval += 2;
 
@@ -2801,6 +2835,15 @@ static void inversionRoutine(){
         exportData(iter);
     }
 
+    float et = (float)(clock() - timestart) / CLOCKS_PER_SEC;
+    if(et > 60){
+        int etmin = (int)(et / 60);
+        fprintf(dat::log_ls, "\nElapsed time: %dmin %ds\n", etmin, lroundf(et - etmin*60));
+    }
+    else{
+        fprintf(dat::log_ls, "\nElapsed time: %.2fs\n", et);
+    }
+
     fclose(dat::log_ls);
     fclose(dat::log_misfit);
     cublasDestroy(cublas_handle);
@@ -2819,6 +2862,7 @@ int main(int argc, const char *argv[]){
         datapath = argv[1];
     }
     dat::parfile = datapath;
+    clock_t timestart = clock();
     if(importData(datapath)){
         switch(mode){
             case 0:{
@@ -2828,7 +2872,8 @@ int main(int argc, const char *argv[]){
             case 1:{
                 loadModel(dat::model_init);
                 prepareSTF();
-                runForward(-1);
+                dat::ntask = 1;
+                runForward(-1, -1);
                 mkdir("output");
                 mkdir("output/0000");
                 if(sh){
@@ -2844,7 +2889,9 @@ int main(int argc, const char *argv[]){
             case 2:{
                 mkdir("output");
                 dat::output_path = "output";
-                clock_t timestart = clock();
+                if(dat::misfit_type == 1){
+                    cufftPlan1d(&cufft_handle, nt, CUFFT_C2C, 1);
+                }
                 prepareObs();
                 if(dat::obs_su){
                     printf("\n");
@@ -2852,8 +2899,10 @@ int main(int argc, const char *argv[]){
                 printf("\n");
                 loadModel(dat::model_init);
                 computeKernels();
-                printf("\ntotal time: %.2fs\n",(float)(clock() - timestart) / CLOCKS_PER_SEC);
-                exportData(-1);
+                exportData(0);
+                if(dat::misfit_type == 1){
+                    cufftDestroy(cufft_handle);
+                }
                 break;
             }
             case 10:{
@@ -2897,6 +2946,14 @@ int main(int argc, const char *argv[]){
     }
     else{
         printf("error loading data\n");
+    }
+    float et = (float)(clock() - timestart) / CLOCKS_PER_SEC;
+    if(et > 60){
+        int etmin = (int)(et / 60);
+        printf("\nElapsed time: %dmin %ds\n", etmin, lroundf(et - etmin*60));
+    }
+    else{
+        printf("\nElapsed time: %.2fs\n", et);
     }
     checkMemoryUsage();
 
