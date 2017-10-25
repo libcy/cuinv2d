@@ -165,6 +165,7 @@ namespace dat{
     float *step_lens;  // host
     float *ls_gtp;  // host
     float *ls_gtg;  // host
+    float **opti_history; // host
 
     int inv_count;
     int inv_maxiter;
@@ -174,8 +175,7 @@ namespace dat{
     float ***lbfgs_Y;  // host
     int lbfgs_used;
 
-    FILE *log_ls;
-    FILE *log_misfit;
+    FILE *logfile;
     int neval;
 }
 namespace mat{
@@ -2363,7 +2363,7 @@ static int computeDirectionCG(float **p_new, float **p_old, float **g_new, float
         return 0;
     }
     else if(dat::inv_maxiter && dat::inv_count > dat::inv_maxiter){
-        fprintf(dat::log_ls, "  restarting NLCG... [periodic restart]\n");
+        fprintf(dat::logfile, "  restarting NLCG... [periodic restart]\n");
         printf("  restarting NLCG... [periodic restart]\n");
         return -1;
     }
@@ -2377,7 +2377,7 @@ static int computeDirectionCG(float **p_new, float **p_old, float **g_new, float
 
     // lose of conjugacy? later
     if(mat::dot(p_new, g_new, nx, nz) > 0){
-        fprintf(dat::log_ls, "  restarting NLCG... [not a descent direction]\n");
+        fprintf(dat::logfile, "  restarting NLCG... [not a descent direction]\n");
         printf("  restarting NLCG... [not a descent direction]\n");
         return -1;
     }
@@ -2390,7 +2390,7 @@ static int computeDirectionLBFGS(float **p_new, float **p_old, float **g_new, fl
         return 0;
     }
     else if(dat::inv_maxiter && dat::inv_count > dat::inv_maxiter){
-        fprintf(dat::log_ls, "  restarting LBFGS... [periodic restart]\n");
+        fprintf(dat::logfile, "  restarting LBFGS... [periodic restart]\n");
         printf("  restarting LBFGS... [periodic restart]\n");
         return -1;
     }
@@ -2445,7 +2445,7 @@ static int computeDirectionLBFGS(float **p_new, float **p_old, float **g_new, fl
 
     float angle = calculateAngle(p_new, g_new, 1, nx, nz);
     if(angle>=pi/2 || angle<=0){
-        fprintf(dat::log_ls, "  restarting LBFGS... [not a descent direction]\n");
+        fprintf(dat::logfile, "  restarting LBFGS... [not a descent direction]\n");
         printf("  restarting LBFGS... [not a descent direction]\n");
         return -1;
     }
@@ -2708,21 +2708,27 @@ static void lineSearch(float **m, float **g, float **p, float f){
             alpha = calculateStep(step_count, step_len_max, &status);
         }
         if(step_count < 10){
-            fprintf(dat::log_ls, "  step 0%d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
+            fprintf(dat::logfile, "  step 0%d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
             printf("  step 0%d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
         }
         else{
-            fprintf(dat::log_ls, "  step %d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
+            fprintf(dat::logfile, "  step %d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
             printf("  step %d  misfit = %f\n", step_count, dat::func_vals[dat::ls_count-1]/dat::misfit_ref);
         }
         if(status > 0){
-            fprintf(dat::log_ls, "  alpha = %.2e\n", alpha);
+            fprintf(dat::logfile, "  alpha = %.2e\n", alpha);
             printf("  alpha = %.2e\n", alpha);
             float angle =  calculateAngle(p, g, -1, nx, nz)*180/pi;
-            fprintf(dat::log_ls, "  angle = %f\n\n", angle);
+            fprintf(dat::logfile, "  angle = %f\n\n", angle);
             printf("  angle = %f\n", angle);
             updateModel(m, p, alpha, alpha_old);
-            fprintf(dat::log_misfit, "%d %f\n", dat::neval, dat::func_vals[argmin(dat::func_vals, dat::ls_count)]/dat::misfit_ref);
+            for(int i = 0; ; i++){
+                if(dat::opti_history[i][0] < 0){
+                    dat::opti_history[i][0] = (float)dat::neval;
+                    dat::opti_history[i][1] = dat::func_vals[argmin(dat::func_vals, dat::ls_count)]/dat::misfit_ref;
+                    break;
+                }
+            }
             return;
         }
         else if(status < 0){
@@ -2758,9 +2764,7 @@ static void inversionRoutine(){
         sprintf(parbuffer, "%s/par", dat::output_path);
         FILE *outfile = fopen(parbuffer, "w");
         sprintf(parbuffer, "%s/log", dat::output_path);
-        dat::log_ls = fopen(parbuffer,"w");
-        sprintf(parbuffer, "%s/misfit", dat::output_path);
-        dat::log_misfit = fopen(parbuffer,"w");
+        dat::logfile = fopen(parbuffer,"w");
         dat::neval = 0;
 
         while(fgets(parbuffer, 80, parfile) != NULL){
@@ -2800,8 +2804,12 @@ static void inversionRoutine(){
     float **p_old = mat::create(nx, nz);
     float **p_new = mat::create(nx, nz);
 
-    dat::func_vals = mat::createHost(dat::inv_iteration * dat::ls_stepcountmax);
-    dat::step_lens = mat::createHost(dat::inv_iteration * dat::ls_stepcountmax);
+    int opti_max = dat::inv_iteration * dat::ls_stepcountmax;
+    dat::func_vals = mat::createHost(opti_max);
+    dat::step_lens = mat::createHost(opti_max);
+    dat::opti_history = mat::createHost(opti_max, 2);
+    mat::initHost(dat::opti_history, -1, opti_max, 2);
+
     dat::ls_gtg = mat::createHost(dat::inv_iteration);
     dat::ls_gtp = mat::createHost(dat::inv_iteration);
     dat::ls_count = 0;
@@ -2809,7 +2817,7 @@ static void inversionRoutine(){
 
     clock_t timestart = clock();
     for(int iter = 0; iter < dat::inv_iteration; iter++){
-        fprintf(dat::log_ls, "iteration %d / %d\n", iter + 1, dat::inv_iteration);
+        fprintf(dat::logfile, "iteration %d / %d\n", iter + 1, dat::inv_iteration);
         printf("\n\nStarting iteration %d / %d\n", iter + 1, dat::inv_iteration);
         float f = computeKernels();
         if(iter == 0){
@@ -2835,17 +2843,21 @@ static void inversionRoutine(){
         exportData(iter);
     }
 
+    fprintf(dat::logfile, "misfit\n");
+    for(int i = 0; lroundf(dat::opti_history[i][0]) >=0; i++){
+        fprintf(dat::logfile, "  %d %f\n", lroundf(dat::opti_history[i][0]), dat::opti_history[i][1]);
+    }
+
     float et = (float)(clock() - timestart) / CLOCKS_PER_SEC;
     if(et > 60){
         int etmin = (int)(et / 60);
-        fprintf(dat::log_ls, "\nElapsed time: %dmin %ds\n", etmin, lroundf(et - etmin*60));
+        fprintf(dat::logfile, "\nelapsed time: %dmin %ds\n", etmin, lroundf(et - etmin*60));
     }
     else{
-        fprintf(dat::log_ls, "\nElapsed time: %.2fs\n", et);
+        fprintf(dat::logfile, "\nelapsed time: %.2fs\n", et);
     }
 
-    fclose(dat::log_ls);
-    fclose(dat::log_misfit);
+    fclose(dat::logfile);
     cublasDestroy(cublas_handle);
     cusolverDnDestroy(solver_handle);
     if(dat::misfit_type == 1){
