@@ -13,9 +13,6 @@ nvcc cuinv2d.cu -arch=sm_50 -lcublas -lcusolver -lcufft
 * True model(Vs ranging from 3150km/s to 3850km/s, 25 sources and 132 stations locating randomly)<br>
 ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/init.png)
 
-* Model after 15 iterations(initial model: Vs_init = 3150km/s)<br>
-![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/15.png)
-
 * Comparison of NLCG and L-BFGS (model_1)<br>
   Vs_init = 3500km/s<br>
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/c3500.png) <br>
@@ -27,3 +24,6 @@ nvcc cuinv2d.cu -arch=sm_50 -lcublas -lcusolver -lcufft
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/cm3.png) <br>
   model_7<br>
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/cm7.png) <br>
+
+* Model after 15 iterations(initial model: Vs_init = 3150km/s)<br>
+![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/15.png)
