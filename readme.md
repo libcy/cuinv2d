@@ -2,18 +2,18 @@
 
 Cuda based 2D elastic full waveform inversion program. [fd2d-adjoint](https://github.com/phlos/fd2d-adjoint) and [seisflows](https://github.com/rmodrak/seisflows) gave me many useful references in writing this. Finite difference method can be accelerated significantly by GPU, and one forward calculation is usually done within a second. The whole inversion process is also performed in GPU, which eliminates the time of reading/writing files and data transfer between host and device.
   
-#### compilation
+#### Compilation
 ```
 nvcc cuinv2d.cu -arch=sm_50 -lcublas -lcusolver -lcufft
 ```
 
-#### input file
+#### Input file
 The input file format of this program is very similar to that of [specfem2d](https://github.com/geodynamics/specfem2d), a sample input file is included (data/Par_file). Model, source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
 
-#### forward modeling
+#### Forward modeling
 The program calculates wavefield propagation with 4th order finite difference method. A unique feature of it's fdm solver is that it can be configured to run multiple forward calculations simutaneously in a single grid, so that it can make full use of the GPU regardless of the size of the model.
 
-#### objective function
+#### Objective function
 Obective function is chosen from RMS misfit and Envelop misfit. Envelope misfit generally shows a better convergence, at a cost of ~10% more time consumption (200×200 grids, 5000 timestep).
 
 * Comparison of envelope misfit and rms misfit (Vs_init = 2800km/s)<br>
@@ -22,7 +22,7 @@ Obective function is chosen from RMS misfit and Envelop misfit. Envelope misfit 
   model_7<br>
   ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/cm7.png) <br>
 
-#### nonlinear optimization
+#### Nonlinear optimization
 Currently supports conjugate gradient method and l-bfgs method. The latter generally requires less forward calculations to complete an inversion, but there are circumstances when cg yields a better final result. 
 
 * Comparison of NLCG and L-BFGS (model_1)<br>
