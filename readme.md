@@ -14,7 +14,7 @@ The input file format of this program is very similar to that of [specfem2d](htt
 The program calculates wavefield propagation with 4th order finite difference method. A unique feature of it's fdm solver is that it can be configured to run multiple forward calculations simutaneously in a single grid, so that it can make full use of the GPU regardless of the size of the model.
 
 #### objective function
-Obective function is chosen from RMS misfit and Envelop misfit. Envelope misfit generally shows a better convergence, at a cost of ~10% more time consumption.
+Obective function is chosen from RMS misfit and Envelop misfit. Envelope misfit generally shows a better convergence, at a cost of ~10% more time consumption (200×200 grids, 5000 timestep).
 
 * Comparison of envelope misfit and rms misfit (Vs_init = 2800km/s)<br>
   model_3<br>
