@@ -8,7 +8,7 @@ nvcc cuinv2d.cu -arch=sm_50 -lcublas -lcusolver -lcufft
 ```
 
 #### input file
-The input file format of this program is very similar to that of [specfem2d](https://github.com/geodynamics/specfem2d). Model, source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
+The input file format of this program is very similar to that of [specfem2d](https://github.com/geodynamics/specfem2d), a sample input file is included (data/Par_file). Model, source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
 
 #### forward modeling
 The program calculates wavefield propagation with 4th order finite difference method. A unique feature of it's fdm solver is that it can be configured to run multiple forward calculations simutaneously in a single grid, so that it can make full use of the GPU regardless of the size of the model.
