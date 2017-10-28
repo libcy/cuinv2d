@@ -923,6 +923,11 @@ static void _mkdir_linux(const char *dir){
     sprintf(path, "mkdir -p %s", dir);
     system(path);
 }
+static char *copyString(const char *str){
+    char *out = (char *)malloc((strlen(str)+1) * sizeof(char));
+    strcpy(out, str);
+    return out;
+}
 static int getTaskIndex(int isrc){
     int index = isrc + ntask - 1;
     if(index >= nsrc){
@@ -1243,25 +1248,20 @@ static void readFortran(const char *fname, int isrc){
                             dat::parametrisation = str2int(value);
                         }
                         else if(strcmp(key, "model_init") == 0){
-                            int len = strlen(value);
-                            dat::model_init = (char *)malloc((len + 1)*sizeof(char));
-                            strcpy(dat::model_init, value);
-                            initialiseModel(value);
+                            free(dat::model_init);
+                            dat::model_init = copyString(value);
                         }
                         else if(strcmp(key, "model_true") == 0){
-                            int len = strlen(value);
-                            dat::model_true = (char *)malloc((len + 1)*sizeof(char));
-                            strcpy(dat::model_true, value);
+                            free(dat::model_true);
+                            dat::model_true = copyString(value);
                         }
                         else if(strcmp(key, "output_path") == 0){
-                            int len = strlen(value);
-                            dat::output_path = (char *)malloc((len + 1)*sizeof(char));
-                            strcpy(dat::output_path, value);
+                            free(dat::output_path);
+                            dat::output_path = copyString(value);
                         }
                         else if(strcmp(key, "obs_su_path") == 0){
-                            int len = strlen(value);
-                            dat::obs_su_path = (char *)malloc((len + 1)*sizeof(char));
-                            strcpy(dat::obs_su_path, value);
+                            free(dat::obs_su_path);
+                            dat::obs_su_path = copyString(value);
                         }
                         else if(strcmp(key, "inv_parameter") == 0){
                             dat::inv_parameter = str2int(value);
@@ -1433,10 +1433,10 @@ static int importData(const char *datapath){
     dat::absorb_left = 1;
     dat::absorb_width = 48000;
 
-    dat::obs_su_path = "trace";
-    dat::output_path = "output";
-    dat::model_init = "model_init";
-    dat::model_true = "model_true";
+    dat::obs_su_path = copyString("trace");
+    dat::output_path = copyString("output");
+    dat::model_init = copyString("model_init");
+    dat::model_true = copyString("model_true");
     dat::optimize = 1;
     dat::filter_kernel = 4;
     dat::inv_iteration = 5;
@@ -1451,6 +1451,7 @@ static int importData(const char *datapath){
     char path[80];
     sprintf(path, "%s/Par_file", datapath);
     readFortran(path, -1);
+    initialiseModel(dat::model_init);
 
     {
         dat::src_x = mat::createHost(nsrc);
@@ -2849,13 +2850,13 @@ static void inversionRoutine(){
 
     fprintf(dat::logfile, "misfit\n");
     for(int i = 0; lroundf(dat::opti_history[i][0]) >=0; i++){
-        fprintf(dat::logfile, "  %d %f\n", lroundf(dat::opti_history[i][0]), dat::opti_history[i][1]);
+        fprintf(dat::logfile, "  %ld %f\n", lroundf(dat::opti_history[i][0]), dat::opti_history[i][1]);
     }
 
     float et = (float)(clock() - timestart) / CLOCKS_PER_SEC;
     if(et > 60){
         int etmin = (int)(et / 60);
-        fprintf(dat::logfile, "\nelapsed time: %dmin %ds\n", etmin, lroundf(et - etmin*60));
+        fprintf(dat::logfile, "\nelapsed time: %dmin %lds\n", etmin, lroundf(et - etmin*60));
     }
     else{
         fprintf(dat::logfile, "\nelapsed time: %.2fs\n", et);
@@ -2890,21 +2891,23 @@ int main(int argc, const char *argv[]){
                 prepareSTF();
                 dat::ntask = 1;
                 runForward(-1, -1);
-                mkdir("output");
-                mkdir("output/0000");
+                mkdir(dat::output_path);
+                char buffer[80];
                 if(sh){
-                    mat::write(dat::uy_forward, dat::nsfe, nx, nz, "output/0000/uy_forward.bin");
+                    sprintf(buffer, "%s/uy_forward.bin", dat::output_path);
+                    mat::write(dat::uy_forward, dat::nsfe, nx, nz, buffer);
                 }
                 if(psv){
-                    mat::write(dat::ux_forward, dat::nsfe, nx, nz, "output/0000/ux_forward.bin");
-                    mat::write(dat::uz_forward, dat::nsfe, nx, nz, "output/0000/uz_forward.bin");
+                    sprintf(buffer, "%s/ux_forward.bin", dat::output_path);
+                    mat::write(dat::ux_forward, dat::nsfe, nx, nz, buffer);
+                    sprintf(buffer, "%s/uz_forward.bin", dat::output_path);
+                    mat::write(dat::uz_forward, dat::nsfe, nx, nz, buffer);
                 }
                 writeSU();
                 break;
             }
             case 2:{
-                mkdir("output");
-                dat::output_path = "output";
+                mkdir(dat::output_path);
                 if(dat::misfit_type == 1){
                     cufftPlan1d(&cufft_handle, nt, CUFFT_C2C, 1);
                 }
@@ -2928,32 +2931,28 @@ int main(int argc, const char *argv[]){
                 break;
             }
             case 11:{
-                mkdir("output");
-                dat::output_path = "output";
+                mkdir(dat::output_path);
                 loadModel(dat::model_init);
                 generateChecker(dat::mu, 0.1, 0.5, 2, 2);
                 exportData(-1);
                 break;
             }
             case 12:{
-                mkdir("output");
-                dat::output_path = "output";
+                mkdir(dat::output_path);
                 loadModel(dat::model_init);
                 generateLayer(dat::mu, 0.1, 5);
                 exportData(-1);
                 break;
             }
             case 13:{
-                mkdir("output");
-                dat::output_path = "output";
+                mkdir(dat::output_path);
                 loadModel(dat::model_init);
                 generateRandomLayer(dat::mu, 0.1, 0.4, 5);
                 exportData(-1);
                 break;
             }
             case 15:{
-                mkdir("output");
-                dat::output_path = "output";
+                mkdir(dat::output_path);
                 loadModel(dat::model_init);
                 mat::copy(dat::mu, dat::mu, 0.64, nx, nz);
                 exportData(-1);
@@ -2966,7 +2965,7 @@ int main(int argc, const char *argv[]){
     float et = (float)(clock() - timestart) / CLOCKS_PER_SEC;
     if(et > 60){
         int etmin = (int)(et / 60);
-        printf("\nElapsed time: %dmin %ds\n", etmin, lroundf(et - etmin*60));
+        printf("\nElapsed time: %dmin %lds\n", etmin, lroundf(et - etmin*60));
     }
     else{
         printf("\nElapsed time: %.2fs\n", et);

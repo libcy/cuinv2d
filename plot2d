@@ -71,14 +71,13 @@ if __name__ == '__main__':
     """
 
     # parse command line arguments
-    x_coords_file = "%s/proc000000_x.bin" % sys.argv[1]
-    z_coords_file = "%s/proc000000_z.bin" % sys.argv[1]
-    database_file = "%s/proc000000_%s.bin" % (sys.argv[1], sys.argv[2])
+    x_coords_file = '%s/proc000000_x.bin' % sys.argv[1]
+    z_coords_file = '%s/proc000000_z.bin' % sys.argv[1]
 
-    # check filenames conform to SPECFEM2D naming convention
-    assert 'proc000000_x.bin' in x_coords_file
-    assert 'proc000000_z.bin' in z_coords_file
-    assert 'proc000000_' in database_file
+    if 'kernel_' in sys.argv[2]:
+        database_file = "%s/%s.bin" % (sys.argv[1], sys.argv[2])
+    else:
+        database_file = "%s/proc000000_%s.bin" % (sys.argv[1], sys.argv[2])
 
     # check that files actually exist
     assert exists(x_coords_file)
