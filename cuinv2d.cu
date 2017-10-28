@@ -1454,6 +1454,18 @@ static int importData(const char *datapath){
     initialiseModel(dat::model_init);
 
     {
+        // int len = strlen(dat::output_path);
+        // for(int i = 0; i < len; i++){
+        //     if(dat::output_path[i] == '/'){
+        //         path[i] = '\n';
+        //         mkdir(path);
+        //     }
+        //     path[i] = dat::output_path[i];
+        // }
+        mkdir(dat::output_path);
+    }
+
+    {
         dat::src_x = mat::createHost(nsrc);
         dat::src_z = mat::createHost(nsrc);
         dat::src_type = mat::createIntHost(nsrc);
@@ -2762,7 +2774,6 @@ static void inversionRoutine(){
     }
 
     {
-        mkdir(dat::output_path);
         char parbuffer[80];
         sprintf(parbuffer, "%s/Par_file", dat::parfile);
         FILE *parfile = fopen(parbuffer, "r");
@@ -2891,7 +2902,6 @@ int main(int argc, const char *argv[]){
                 prepareSTF();
                 dat::ntask = 1;
                 runForward(-1, -1);
-                mkdir(dat::output_path);
                 char buffer[80];
                 if(sh){
                     sprintf(buffer, "%s/uy_forward.bin", dat::output_path);
@@ -2907,7 +2917,6 @@ int main(int argc, const char *argv[]){
                 break;
             }
             case 2:{
-                mkdir(dat::output_path);
                 if(dat::misfit_type == 1){
                     cufftPlan1d(&cufft_handle, nt, CUFFT_C2C, 1);
                 }
@@ -2931,28 +2940,24 @@ int main(int argc, const char *argv[]){
                 break;
             }
             case 11:{
-                mkdir(dat::output_path);
                 loadModel(dat::model_init);
                 generateChecker(dat::mu, 0.1, 0.5, 2, 2);
                 exportData(-1);
                 break;
             }
             case 12:{
-                mkdir(dat::output_path);
                 loadModel(dat::model_init);
                 generateLayer(dat::mu, 0.1, 5);
                 exportData(-1);
                 break;
             }
             case 13:{
-                mkdir(dat::output_path);
                 loadModel(dat::model_init);
                 generateRandomLayer(dat::mu, 0.1, 0.4, 5);
                 exportData(-1);
                 break;
             }
             case 15:{
-                mkdir(dat::output_path);
                 loadModel(dat::model_init);
                 mat::copy(dat::mu, dat::mu, 0.64, nx, nz);
                 exportData(-1);
