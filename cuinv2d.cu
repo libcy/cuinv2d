@@ -8,10 +8,11 @@
 #include <cusolverDn.h>
 
 #ifdef _WIN32
-     #include <direct.h>
-     #define mkdir _mkdir
+    #include <direct.h>
 #elif defined __linux__
-     #define mkdir _mkdir_linux
+    #include <sys/stat.h>
+    #include <sys/types.h>
+    #define _mkdir(dir) mkdir(dir, 0777)
 #endif
 
 #define devij int i = blockIdx.x, j = threadIdx.x
@@ -918,10 +919,17 @@ __global__ void copyC2Abs(float *a, cufftComplex *b, int n){
     a[i] = sqrt(b[i].x*b[i].x + b[i].y*b[i].y) / n;
 }
 
-static void _mkdir_linux(const char *dir){
+static void createDirectory(const char *dir){
     char path[80];
-    sprintf(path, "mkdir -p %s", dir);
-    system(path);
+    int len = strlen(dir);
+    for(int i = 0; i < len; i++){
+        if(dat::output_path[i] == '/'){
+            path[i] = '\0';
+            _mkdir(path);
+        }
+        path[i] = dat::output_path[i];
+    }
+    _mkdir(dir);
 }
 static char *copyString(const char *str){
     char *out = (char *)malloc((strlen(str)+1) * sizeof(char));
@@ -1452,18 +1460,7 @@ static int importData(const char *datapath){
     sprintf(path, "%s/Par_file", datapath);
     readFortran(path, -1);
     initialiseModel(dat::model_init);
-
-    {
-        // int len = strlen(dat::output_path);
-        // for(int i = 0; i < len; i++){
-        //     if(dat::output_path[i] == '/'){
-        //         path[i] = '\n';
-        //         mkdir(path);
-        //     }
-        //     path[i] = dat::output_path[i];
-        // }
-        mkdir(dat::output_path);
-    }
+    createDirectory(dat::output_path);
 
     {
         dat::src_x = mat::createHost(nsrc);
@@ -1692,7 +1689,7 @@ static void exportData(int iter){
         sprintf(name, "%s/%d", dat::output_path, iter);
     }
 
-    mkdir(name);
+    createDirectory(name);
 
     char path[80];
     sprintf(path, "%s/proc000000_x.bin", name);
@@ -1939,7 +1936,7 @@ static void writeSU(float ***u_obs, char c){
 static void writeSU(){
     float ***u_obs = mat::createHost(nsrc, nrec, nt);
 
-    mkdir(dat::obs_su_path);
+    createDirectory(dat::obs_su_path);
 
     if(sh){
         mat::copyDeviceToHost(u_obs, dat::u_obs_y, nsrc, nrec, nt);
