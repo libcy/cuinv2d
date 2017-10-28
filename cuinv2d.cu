@@ -10,9 +10,8 @@
 #ifdef _WIN32
      #include <direct.h>
      #define mkdir _mkdir
-     #define rmdir _rmdir
 #elif defined __linux__
-     #include <unistd.h>
+     #define mkdir _mkdir_linux
 #endif
 
 #define devij int i = blockIdx.x, j = threadIdx.x
@@ -919,6 +918,11 @@ __global__ void copyC2Abs(float *a, cufftComplex *b, int n){
     a[i] = sqrt(b[i].x*b[i].x + b[i].y*b[i].y) / n;
 }
 
+static void _mkdir_linux(const char *dir){
+    char path[80];
+    sprintf(path, "mkdir -p %s", dir);
+    system(path);
+}
 static int getTaskIndex(int isrc){
     int index = isrc + ntask - 1;
     if(index >= nsrc){

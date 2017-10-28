@@ -1,0 +1,7 @@
+output/
+trace/
+archive/
+*.exe
+*.lib
+*.exp
+*.out
