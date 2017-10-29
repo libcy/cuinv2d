@@ -52,7 +52,7 @@ def mesh2grid(v, x, z):
         for i in np.where(np.isnan(V)):
             V[i] = W[i]
 
-    return np.reshape(V, (int(nz), int(nx)))
+    return np.reshape(V, (int(nz), int(nx))), x, z
 
 
 
@@ -103,8 +103,16 @@ if __name__ == '__main__':
 
 
     # interpolate to uniform rectangular grid
-    V = mesh2grid(v, x, z)
+    V, X, Z = mesh2grid(v, x, z)
 
     # display figure
-    pylab.pcolor(V)
+    pylab.pcolor(X, Z, V)
+    locs = np.arange(X.min(), X.max() + 1, (X.max() - X.min()) / 5)
+    pylab.xticks(locs, map(lambda x: "%g" % x, locs / 1e3))
+    locs = np.arange(Z.min(), Z.max() + 1, (Z.max() - Z.min()) / 5)
+    pylab.yticks(locs, map(lambda x: "%g" % x, locs / 1e3))
+    pylab.colorbar()
+    pylab.xlabel('x / km')
+    pylab.ylabel('z / km')
+    pylab.gca().invert_yaxis()
     pylab.show()
