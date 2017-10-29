@@ -724,7 +724,7 @@ __global__ void initialiseAbsorbingBoundaries(float **absbound, float width,
 }
 __global__ void prepareEnvelopeSTF(float **adstf, float *etmp, float *syn, float *ersd, int nt, int irec, int jnt){
     int it = blockIdx.x;
-    adstf[irec][nt - it - 1 + jnt] = etmp[it] * syn[it] - ersd[it];
+    adstf[irec][nt-it-1 + jnt] = etmp[it] * syn[it] - ersd[it];
 }
 __global__ void filterKernelX(float **model, float **gtemp, int nx, int sigma){
     devij;
