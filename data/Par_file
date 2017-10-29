@@ -9,7 +9,7 @@ ntask                           = 5       # run foward simultaneously
 
 model_init                      = model/homo_3500
 model_true                      = model/checker_4x4
-output_path                     = output
+output_path                     = output/checker_4x4
 
 nt                              = 5000
 dt                              = 0.06
