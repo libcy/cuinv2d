@@ -496,6 +496,7 @@ dim3 &nzt = dat::nzt;
 int &sh = dat::wave_propagation_sh;
 int &psv = dat::wave_propagation_psv;
 int &mode = dat::simulation_mode;
+int &ntask = dat::ntask;
 
 int &nx = dat::nx;
 int &nx2 = dat::nx2;
@@ -503,8 +504,6 @@ int &nz = dat::nz;
 int &nt = dat::nt;
 int &nsrc = dat::nsrc;
 int &nrec = dat::nrec;
-int &ntask = dat::ntask;
-
 float &dt = dat::dt;
 
 __global__ void divSY(float **dsy, float **sxy, float **szy, float **X, float **Z, int nx, int nz){
@@ -723,12 +722,6 @@ __global__ void initialiseAbsorbingBoundaries(float **absbound, float width,
         }
     }
 }
-__global__ void prepareAdjointSTF(float **adstf, float **u_syn, float ***u_obs, float *tw, int nt, int isrc, int j){
-    int it = blockIdx.x;
-    int irec = threadIdx.x;
-    int jnt = j * nt;
-    adstf[irec][nt - it - 1 + jnt] = (u_syn[irec][it + jnt] - u_obs[isrc+j][irec][it]) * tw[it] * 2;
-}
 __global__ void prepareEnvelopeSTF(float **adstf, float *etmp, float *syn, float *ersd, int nt, int irec, int jnt){
     int it = blockIdx.x;
     adstf[irec][nt - it - 1 + jnt] = etmp[it] * syn[it] - ersd[it];
@@ -768,10 +761,11 @@ __global__ void getTaperWeights(float *tw, float dt, int nt){
         tw[it] = 1;
     }
 }
-__global__ void calculateMisfit(float *misfit, float **u_syn, float ***u_obs, float *tw, float dt, int isrc, int irec, int j, int nt){
+__global__ void calculateWaveformMisfit(float **adstf, float *misfit, float **u_syn, float ***u_obs, float *tw, int isrc, int irec, int j, int nt){
     int it = blockIdx.x;
-    float wavedif = (u_syn[irec][it+j*nt] - u_obs[isrc+j][irec][it]) * tw[it];
-    misfit[it] = wavedif * dt;
+    int jnt = j * nt;
+    misfit[it] = (u_syn[irec][it+jnt] - u_obs[isrc+j][irec][it]) * tw[it];
+    adstf[irec][nt-it-1 + jnt] = misfit[it] * tw[it] * 2;
 }
 __global__ void envelopetmp(float *etmp, float *esyn, float *eobs, float max){
     int it = blockIdx.x;
@@ -2286,6 +2280,13 @@ static float computeKernelsAndMisfit(int kernel){
         printf("Computing gradient\n");
         initialiseKernels();
     }
+    if(!sh){
+        mat::init(dat::adstf_y, 0, nrec, nt * ntask);
+    }
+    if(!psv){
+        mat::init(dat::adstf_x, 0, nrec, nt * ntask);
+        mat::init(dat::adstf_z, 0, nrec, nt * ntask);
+    }
     for(int isrc = 0; isrc < nsrc; isrc+=ntask){
         int jsrc = getTaskIndex(isrc);
         runForward(isrc, jsrc);
@@ -2305,31 +2306,14 @@ static float computeKernelsAndMisfit(int kernel){
                 }
                 else{
                     if(sh){
-                        calculateMisfit<<<nt, 1>>>(d_misfit, dat::out_y, dat::u_obs_y, dat::tw, sqrt(dt), isrc, irec, j, nt);
-                        misfit += mat::norm(d_misfit, nt);
+                        calculateWaveformMisfit<<<nt, 1>>>(dat::adstf_y, d_misfit, dat::out_y, dat::u_obs_y, dat::tw, isrc, irec, j, nt);
+                        misfit += mat::norm(d_misfit, nt) * sqrt(dt);
                     }
                     if(psv){
-                        calculateMisfit<<<nt, 1>>>(d_misfit, dat::out_x, dat::u_obs_x, dat::tw, sqrt(dt), isrc, irec, j, nt);
-                        misfit += mat::norm(d_misfit, nt);
-                        calculateMisfit<<<nt, 1>>>(d_misfit, dat::out_z, dat::u_obs_z, dat::tw, sqrt(dt), isrc, irec, j, nt);
-                        misfit += mat::norm(d_misfit, nt);
-                    }
-                }
-            }
-            // merge above: later
-            if(dat::misfit_type != 1){
-                if(sh){
-                    prepareAdjointSTF<<<nt, nrec>>>(dat::adstf_y, dat::out_y, dat::u_obs_y, dat::tw, nt, isrc, j);
-                    if(!sh){
-                        mat::init(dat::adstf_x, 0, nrec, nt);
-                        mat::init(dat::adstf_z, 0, nrec, nt);
-                    }
-                }
-                if(psv){
-                    prepareAdjointSTF<<<nt, nrec>>>(dat::adstf_x, dat::out_x, dat::u_obs_x, dat::tw, nt, isrc, j);
-                    prepareAdjointSTF<<<nt, nrec>>>(dat::adstf_z, dat::out_z, dat::u_obs_z, dat::tw, nt, isrc, j);
-                    if(!sh){
-                        mat::init(dat::adstf_y, 0, nrec, nt);
+                        calculateWaveformMisfit<<<nt, 1>>>(dat::adstf_x, d_misfit, dat::out_x, dat::u_obs_x, dat::tw, isrc, irec, j, nt);
+                        misfit += mat::norm(d_misfit, nt) * sqrt(dt);
+                        calculateWaveformMisfit<<<nt, 1>>>(dat::adstf_z, d_misfit, dat::out_z, dat::u_obs_z, dat::tw, isrc, irec, j, nt);
+                        misfit += mat::norm(d_misfit, nt) * sqrt(dt);
                     }
                 }
             }
