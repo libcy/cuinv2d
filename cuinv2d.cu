@@ -146,6 +146,7 @@ namespace dat{
     float ***vz_forward;  // host
 
     int filter_kernel;
+    float unsharp_mask;
     float misfit_ref;
     float **gsum;
     float **gtemp;
@@ -1222,6 +1223,9 @@ static void readFortran(const char *fname, int isrc){
                         else if(strcmp(key, "filter_kernel") == 0){
                             dat::filter_kernel = str2int(value);
                         }
+                        else if(strcmp(key, "unsharp_mask") == 0){
+                            dat::unsharp_mask = str2int(value);
+                        }
                         else if(strcmp(key, "inv_iteration") == 0){
                             dat::inv_iteration = str2int(value);
                         }
@@ -1441,6 +1445,7 @@ static int importData(const char *datapath){
     dat::model_true = copyString("model_true");
     dat::optimize = 1;
     dat::filter_kernel = 4;
+    dat::unsharp_mask = 0;
     dat::inv_iteration = 5;
     dat::inv_maxiter = 0;
     dat::lbfgs_mem = 5;
@@ -1668,6 +1673,7 @@ static int importData(const char *datapath){
 }
 static void exportData(int iter){
     iter++;
+    int kernel = (iter > 0 && iter <= dat::inv_iteration);
 
     char name[80];
     if(iter < 10){
@@ -1700,7 +1706,7 @@ static void exportData(int iter){
     FILE *krfile = NULL;
     FILE *klfile = NULL;
     FILE *kmfile = NULL;
-    if(iter > 0){
+    if(kernel){
         sprintf(path, "%s/kernel_rho.bin", name);
         krfile = fopen(path,"wb");
         sprintf(path, "%s/kernel_lambda.bin", name);
@@ -1716,7 +1722,7 @@ static void exportData(int iter){
     fwrite(&npt, sizeof(int), 1, pfile);
     fwrite(&npt, sizeof(int), 1, sfile);
 
-    if(iter > 0){
+    if(kernel){
         fwrite(&npt, sizeof(int), 1, krfile);
         fwrite(&npt, sizeof(int), 1, kmfile);
         fwrite(&npt, sizeof(int), 1, klfile);
@@ -1746,7 +1752,7 @@ static void exportData(int iter){
     mat::copyDeviceToHost(buffer, vs, npt);
     fwrite(buffer, sizeof(float), npt, sfile);
 
-    if(iter > 0){
+    if(kernel){
         mat::copyDeviceToHost(buffer, mat::getDataPointer(dat::K_rho), npt);
         fwrite(buffer, sizeof(float), npt, krfile);
         mat::copyDeviceToHost(buffer, mat::getDataPointer(dat::K_mu), npt);
@@ -1766,7 +1772,7 @@ static void exportData(int iter){
     fclose(pfile);
     fclose(sfile);
 
-    if(iter > 0){
+    if(kernel){
         fclose(krfile);
         fclose(kmfile);
         fclose(klfile);
@@ -1790,6 +1796,15 @@ static void applyGaussian(float **p, int sigma){
     filterKernelZ<<<nxb, nzt>>>(p, gtemp, gsum, nz, sigma);
     mat::freeDevice(gsum);
     mat::freeDevice(gtemp);
+}
+static void applyUnsharpMask(float **p, int sigma, int n){
+    float **p2 = mat::create(nx, nz);
+    for(int i=0; i<sigma; i++){
+        mat::copy(p2, p, nx, nz);
+        applyGaussian(p2, n);
+        mat::calc(p, 2, p, -1, p2, nx, nz);
+    }
+    mat::freeDevice(p2);
 }
 static void generateChecker(float **p, float dp, float margin, int cx, int cz){
     float lx = dat::Lx / (cx + (cx + 3) * margin);
@@ -2838,6 +2853,13 @@ static void inversionRoutine(){
         mat::copy(p_old, p_new, nx, nz);
         mat::copy(g_old, g_new, nx, nz);
         exportData(iter);
+    }
+    int unsharp = lroundf(dat::unsharp_mask * dat::filter_kernel);
+    if(unsharp > 0){
+        applyUnsharpMask(dat::lambda, unsharp, 2);
+        applyUnsharpMask(dat::mu, unsharp, 2);
+        applyUnsharpMask(dat::rho, unsharp, 2);
+        exportData(dat::inv_iteration);
     }
 
     fprintf(dat::logfile, "misfit\n");

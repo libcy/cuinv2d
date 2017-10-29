@@ -33,3 +33,4 @@ ls_stepleninit                  = 0.05    # initial step length of line search
 ls_stepcountmax                 = 10      # maximum step count of line search
 ls_thresh                       = 1.2     # stop if |log(x/x0)| < log(thresh)
 filter_kernel                   = 5       # apply gaussian filter to kernel
+unsharp_mask                    = 1       # sharpen output image
