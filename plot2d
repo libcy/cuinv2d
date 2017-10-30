@@ -74,14 +74,16 @@ if __name__ == '__main__':
     x_coords_file = '%s/proc000000_x.bin' % sys.argv[1]
     z_coords_file = '%s/proc000000_z.bin' % sys.argv[1]
 
-    if 'kernel_' in sys.argv[2]:
-        database_file = "%s/%s.bin" % (sys.argv[1], sys.argv[2])
-    else:
-        database_file = "%s/proc000000_%s.bin" % (sys.argv[1], sys.argv[2])
-
     # check that files actually exist
     assert exists(x_coords_file)
     assert exists(z_coords_file)
+
+    database_file = "%s/%s" % (sys.argv[1], sys.argv[2])
+    if not exists(database_file):
+        database_file = "%s/%s.bin" % (sys.argv[1], sys.argv[2])
+    if not exists(database_file):
+        database_file = "%s/proc000000_%s.bin" % (sys.argv[1], sys.argv[2])
+        
     assert exists(database_file)
 
     # read mesh coordinates

@@ -13,7 +13,7 @@ output_path                     = output/checker_4x4_aa
 
 obs_su                          = 0       # read observed data from su file
 src_file                        = 0       # read source data from file
-rec_file                        = 0       # read receiver data from file
+rec_file                        = 1       # read receiver data from file
 obs_su_path                     = trace   # folder containing su file
 src_file_path                   = data    # folder containing source file
 rec_file_path                   = data    # folder containing receiver file
@@ -46,9 +46,10 @@ ls_thresh                       = 1.2     # stop if |log(x/x0)| < log(thresh)
 filter_kernel                   = 5       # apply gaussian filter to kernel
 unsharp_mask                    = 0.0     # sharpen output image
 
-# source/receiver configuration, ignored if src_file/rec_file = 0
+# --------source/receiver--------
+# ignored if src_file/rec_file = 0
 # source type 1: ricker
-# alignment 0: top 1: bottom 2: left 3: right 4: spread
+# alignment 0: top 1: bottom 2: left 3: right 4: fill
 src_align                       = 0
 rec_align                       = 0
 src_type                        = 1

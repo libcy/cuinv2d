@@ -457,11 +457,15 @@ namespace mat{
     }
     void write(float *data, int n, const char *fname){
         FILE *file = fopen(fname, "wb");
+        int npt = n * 4;
+        fwrite(&npt, sizeof(int), 1, file);
         fwrite(data, sizeof(float), n, file);
         fclose(file);
     }
     void write(float **data, int m, int n, const char *fname){
         FILE *file = fopen(fname, "wb");
+        int npt = m * n * 4;
+        fwrite(&npt, sizeof(int), 1, file);
         for(int i = 0; i < m; i++){
             fwrite(data[i], sizeof(float), n, file);
         }
@@ -469,6 +473,8 @@ namespace mat{
     }
     void write(float ***data, int p, int m, int n, const char *fname){
         FILE *file = fopen(fname, "wb");
+        int npt = p * m * n * 4;
+        fwrite(&npt, sizeof(int), 1, file);
         for(int k = 0; k < p; k++){
             for(int i = 0; i < m; i++){
                 fwrite(data[k][i], sizeof(float), n, file);
@@ -1485,31 +1491,45 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
 
     }
     else{
+        // from here
         float *pos = mat::createHost(n);
         float L;
         float S = 0;
-        float d;
         float &width = dat::absorb_width;
         switch(type){
             case 0:{
                 if(dat::absorb_top){
                     mat::init(d_pos_z, width, n);
-                    L = dat::Lx;
-                    if(dat::absorb_left){
-                        L -= width;
-                        S = width;
-                    }
-                    if(dat::absorb_right){
-                        L -= width;
-                    }
-                    d = L / (n - 1);
-                    for(int i = 0; i < n; i++){
-                        pos[i] = S + d * i; // from here
-                    }
-                    mat::copyHostToDevice(d_pos_x, pos, n);
+                }
+                else{
+                    mat::init(d_pos_z, 0, n);
                 }
                 break;
             }
+            case 1:{
+                if(dat::absorb_bottom){
+                    mat::init(d_pos_z, dat::Lz - width, n);
+                }
+                else{
+                    mat::init(d_pos_z, dat::Lz, n);
+                }
+                break;
+            }
+        }
+        if(type == 0 || type == 1){
+            L = dat::Lx;
+            if(dat::absorb_left){
+                L -= width;
+                S = width;
+            }
+            if(dat::absorb_right){
+                L -= width;
+            }
+            float dx = L / (n + 1);
+            for(int i = 1; i <= n; i++){
+                pos[i] = S + dx * i;
+            }
+            mat::copyHostToDevice(d_pos_x, pos, n);
         }
         free(pos);
     }
@@ -2882,8 +2902,12 @@ static void inversionRoutine(){
     {
         char parbuffer[81];
         FILE *parfile = fopen(dat::parfile, "r");
-        sprintf(parbuffer, "%s/par", dat::output_path);
+        sprintf(parbuffer, "%s/cfg", dat::output_path);
         FILE *outfile = fopen(parbuffer, "w");
+        sprintf(parbuffer, "%s/src", dat::output_path);
+        FILE *srcfile = fopen(parbuffer, "w");
+        sprintf(parbuffer, "%s/rec", dat::output_path);
+        FILE *recfile = fopen(parbuffer, "w");
         sprintf(parbuffer, "%s/log", dat::output_path);
         dat::logfile = fopen(parbuffer,"w");
         dat::neval = 0;
@@ -2902,7 +2926,30 @@ static void inversionRoutine(){
             fprintf(outfile, "%s", parbuffer);
         }
 
+        float *src_x = mat::createHost(nsrc);
+        float *src_z = mat::createHost(nsrc);
+        mat::copyDeviceToHost(src_x, dat::src_x, nsrc);
+        mat::copyDeviceToHost(src_z, dat::src_z, nsrc);
+        for(int i = 0; i < nsrc; i++){
+            fprintf(srcfile, "%.5e %.5e\n", src_x[i], src_z[i]);
+        }
+
+        float *rec_x = mat::createHost(nrec);
+        float *rec_z = mat::createHost(nrec);
+        mat::copyDeviceToHost(rec_x, dat::rec_x, nrec);
+        mat::copyDeviceToHost(rec_z, dat::rec_z, nrec);
+        for(int i = 0; i < nrec; i++){
+            fprintf(recfile, "%.5e %.5e\n", rec_x[i], rec_z[i]);
+        }
+
+        free(src_x);
+        free(src_z);
+        free(rec_x);
+        free(rec_z);
+
         fclose(parfile);
+        fclose(srcfile);
+        fclose(recfile);
         fclose(outfile);
     }
 
@@ -3018,15 +3065,31 @@ int main(int argc, const char *argv[]){
                 dat::ntask = 1;
                 runForward(-1, -1);
                 char buffer[80];
-                if(sh){
-                    sprintf(buffer, "%s/uy_forward.bin", dat::output_path);
-                    mat::write(dat::uy_forward, dat::nsfe, nx, nz, buffer);
-                }
-                if(psv){
-                    sprintf(buffer, "%s/ux_forward.bin", dat::output_path);
-                    mat::write(dat::ux_forward, dat::nsfe, nx, nz, buffer);
-                    sprintf(buffer, "%s/uz_forward.bin", dat::output_path);
-                    mat::write(dat::uz_forward, dat::nsfe, nx, nz, buffer);
+                char itext[10];
+                for(int i = 0; i < dat::nsfe; i++){
+                    if(i+1 < 10){
+                        sprintf(itext, "000%d", i+1);
+                    }
+                    else if(i+1 < 100){
+                        sprintf(itext, "00%d", i+1);
+                    }
+                    else if(i+1 < 1000){
+                        sprintf(itext, "0%d", i+1);
+                    }
+                    else{
+                        sprintf(itext, "%d", i+1);
+                    }
+                    if(sh){
+                        sprintf(buffer, "%s/vy_%.2f_%s.bin", dat::output_path, dat::sfe*dt, itext);
+                        mat::write(dat::vy_forward[i], nx, nz, buffer);
+                    }
+                    if(psv){
+                        sprintf(buffer, "%s/vx_%.2f_%s.bin", dat::output_path, dat::sfe*dt, itext);
+                        mat::write(dat::vx_forward[i], nx, nz, buffer);
+                        sprintf(buffer, "%s/vz_%.2f_%s.bin", dat::output_path, dat::sfe*dt, itext);
+                        mat::write(dat::vz_forward[i], nx, nz, buffer);
+                    }
+
                 }
                 writeSU();
                 break;
