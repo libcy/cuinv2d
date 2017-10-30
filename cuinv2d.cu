@@ -59,11 +59,17 @@ namespace dat{
     int ntask;
     int obs_type;
     int obs_su;
+    int src_file;
+    int rec_file;
+    int src_align;
+    int rec_align;
     int misfit_type;
     int parametrisation;
 
     const char *parfile;
     char *obs_su_path;
+    char *src_file_path;
+    char *rec_file_path;
     char *model_init;
     char *model_true;
     char *output_path;
@@ -1199,6 +1205,51 @@ static void readFortran(const char *fname, int isrc){
                         else if(strcmp(key, "obs_su") == 0){
                             dat::obs_su = str2int(value);
                         }
+                        else if(strcmp(key, "src_file") == 0){
+                            dat::src_file = str2int(value);
+                        }
+                        else if(strcmp(key, "rec_file") == 0){
+                            dat::rec_file = str2int(value);
+                        }
+                        else if(strcmp(key, "src_type") == 0){
+                            if(dat::src_file == 0 && nsrc > 0){
+                                dat::src_type = mat::createIntHost(nsrc);
+                                int type = str2int(value);
+                                for(int i = 0; i < nsrc; i++){
+                                    dat::src_type[i] = type;
+                                }
+                            }
+                        }
+                        else if(strcmp(key, "src_f0") == 0){
+                            if(dat::src_file == 0 && nsrc > 0){
+                                dat::src_f0 = mat::createHost(nsrc);
+                                mat::initHost(dat::src_f0, str2float(value), nsrc);
+                            }
+                        }
+                        else if(strcmp(key, "src_t0") == 0){
+                            if(dat::src_file == 0 && nsrc > 0){
+                                dat::src_t0 = mat::createHost(nsrc);
+                                mat::initHost(dat::src_t0, str2float(value), nsrc);
+                            }
+                        }
+                        else if(strcmp(key, "src_angle") == 0){
+                            if(dat::src_file == 0 && nsrc > 0){
+                                dat::src_angle = mat::createHost(nsrc);
+                                mat::initHost(dat::src_angle, str2float(value), nsrc);
+                            }
+                        }
+                        else if(strcmp(key, "src_factor") == 0){
+                            if(dat::src_file == 0 && nsrc > 0){
+                                dat::src_factor = mat::createHost(nsrc);
+                                mat::initHost(dat::src_factor, str2float(value), nsrc);
+                            }
+                        }
+                        else if(strcmp(key, "src_align") == 0){
+                            dat::src_align = str2int(value);
+                        }
+                        else if(strcmp(key, "rec_align") == 0){
+                            dat::rec_align = str2int(value);
+                        }
                         else if(strcmp(key, "absorb_left") == 0){
                             dat::absorb_left = str2int(value);
                         }
@@ -1216,6 +1267,9 @@ static void readFortran(const char *fname, int isrc){
                         }
                         else if(strcmp(key, "nsrc") == 0){
                             dat::nsrc = str2int(value);
+                        }
+                        else if(strcmp(key, "nrec") == 0){
+                            dat::nrec = str2int(value);
                         }
                         else if(strcmp(key, "sfe") == 0){
                             dat::sfe = str2int(value);
@@ -1269,6 +1323,14 @@ static void readFortran(const char *fname, int isrc){
                             free(dat::obs_su_path);
                             dat::obs_su_path = copyString(value);
                         }
+                        else if(strcmp(key, "src_file_path") == 0){
+                            free(dat::src_file_path);
+                            dat::src_file_path = copyString(value);
+                        }
+                        else if(strcmp(key, "rec_file_path") == 0){
+                            free(dat::rec_file_path);
+                            dat::rec_file_path = copyString(value);
+                        }
                         else if(strcmp(key, "inv_parameter") == 0){
                             dat::inv_parameter = str2int(value);
                         }
@@ -1292,7 +1354,7 @@ static void readFortran(const char *fname, int isrc){
                         else if(strcmp(key, "factor") == 0){
                             dat::src_factor[isrc] = str2float(value);
                         }
-                        else if(strcmp(key, "type") == 0 || strcmp(key, "source_type") == 0){
+                        else if(strcmp(key, "type") == 0 || strcmp(key, "time_function_type") == 0){
                             dat::src_type[isrc] = str2float(value);
                         }
                     }
@@ -1418,6 +1480,41 @@ static int loadModel(const char *model_dir){
 
     return 1;
 }
+static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
+    if(type == 4){
+
+    }
+    else{
+        float *pos = mat::createHost(n);
+        float L;
+        float S = 0;
+        float d;
+        float &width = dat::absorb_width;
+        switch(type){
+            case 0:{
+                if(dat::absorb_top){
+                    mat::init(d_pos_z, width, n);
+                    L = dat::Lx;
+                    if(dat::absorb_left){
+                        L -= width;
+                        S = width;
+                    }
+                    if(dat::absorb_right){
+                        L -= width;
+                    }
+                    d = L / (n - 1);
+                    for(int i = 0; i < n; i++){
+                        pos[i] = S + d * i; // from here
+                    }
+                    mat::copyHostToDevice(d_pos_x, pos, n);
+                }
+                break;
+            }
+        }
+        free(pos);
+    }
+
+}
 static int importData(const char *datapath){
     dat::simulation_mode = 0;
     dat::wave_propagation_sh = 1;
@@ -1427,6 +1524,8 @@ static int importData(const char *datapath){
     dat::misfit_type = 0;
     dat::parametrisation = 1;
     dat::obs_su = 0;
+    dat::src_file = 0;
+    dat::rec_file = 0;
     dat::nt = 5000;
     dat::dt = 0.06;
     dat::sfe = 10;
@@ -1440,6 +1539,8 @@ static int importData(const char *datapath){
     dat::absorb_width = 48000;
 
     dat::obs_su_path = copyString("trace");
+    dat::src_file_path = copyString("data");
+    dat::rec_file_path = copyString("data");
     dat::output_path = copyString("output");
     dat::model_init = copyString("model_init");
     dat::model_true = copyString("model_true");
@@ -1456,12 +1557,11 @@ static int importData(const char *datapath){
     dat::inv_parameter = 1;
 
     char path[80];
-    sprintf(path, "%s/Par_file", datapath);
-    readFortran(path, -1);
+    readFortran(datapath, -1);
     initialiseModel(dat::model_init);
     createDirectory(dat::output_path);
 
-    {
+    if(dat::src_file){
         dat::src_x = mat::createHost(nsrc);
         dat::src_z = mat::createHost(nsrc);
         dat::src_type = mat::createIntHost(nsrc);
@@ -1472,13 +1572,13 @@ static int importData(const char *datapath){
 
         for(int isrc = 0; isrc < nsrc; isrc++){
             if(isrc < 10){
-                sprintf(path, "%s/SOURCE_00000%d", datapath, isrc);
+                sprintf(path, "%s/SOURCE_00000%d", dat::src_file_path, isrc);
             }
             else if(isrc < 100){
-                sprintf(path, "%s/SOURCE_0000%d", datapath, isrc);
+                sprintf(path, "%s/SOURCE_0000%d", dat::src_file_path, isrc);
             }
             else{
-                sprintf(path, "%s/SOURCE_000%d", datapath, isrc);
+                sprintf(path, "%s/SOURCE_000%d", dat::src_file_path, isrc);
             }
             readFortran(path, isrc);
         }
@@ -1495,19 +1595,25 @@ static int importData(const char *datapath){
         free(src_x);
         free(src_z);
     }
+    else{
+        dat::src_x = mat::create(nsrc);
+        dat::src_z = mat::create(nsrc);
+        initialisePosition(dat::src_x, dat::src_z, nsrc, dat::src_align);
+    }
 
-    {
-        sprintf(path, "%s/STATIONS", datapath);
+    if(dat::rec_file){
+        sprintf(path, "%s/STATIONS", dat::rec_file_path);
         FILE *stfile = fopen(path,"r");
         char buffer[80];
         char numbuffer[40];
-        dat::nrec = 0;
-        while(fgets(buffer, 80, stfile) != NULL){
-            if(buffer[0] == 'S'){
-                dat::nrec ++;
-            }
-        }
-        fseek (stfile, 0, SEEK_SET);
+
+        // dat::nrec = 0;
+        // while(fgets(buffer, 80, stfile) != NULL){
+        //     if(buffer[0] == 'S'){
+        //         dat::nrec ++;
+        //     }
+        // }
+        // fseek (stfile, 0, SEEK_SET);
 
         float *rec_x = mat::createHost(nrec);
         float *rec_z = mat::createHost(nrec);
@@ -1562,6 +1668,11 @@ static int importData(const char *datapath){
         free(rec_z);
 
         fclose(stfile);
+    }
+    else{
+        dat::rec_x = mat::create(nrec);
+        dat::rec_z = mat::create(nrec);
+        initialisePosition(dat::rec_x, dat::rec_z, nrec, dat::rec_align);
     }
 
     {
@@ -1943,10 +2054,9 @@ static void writeSU(float ***u_obs, char c){
     }
 }
 static void writeSU(){
-    float ***u_obs = mat::createHost(nsrc, nrec, nt);
-
     createDirectory(dat::obs_su_path);
 
+    float ***u_obs = mat::createHost(nsrc, nrec, nt);
     if(sh){
         mat::copyDeviceToHost(u_obs, dat::u_obs_y, nsrc, nrec, nt);
         writeSU(u_obs, 'y');
@@ -2770,17 +2880,19 @@ static void inversionRoutine(){
     }
 
     {
-        char parbuffer[80];
-        sprintf(parbuffer, "%s/Par_file", dat::parfile);
-        FILE *parfile = fopen(parbuffer, "r");
+        char parbuffer[81];
+        FILE *parfile = fopen(dat::parfile, "r");
         sprintf(parbuffer, "%s/par", dat::output_path);
         FILE *outfile = fopen(parbuffer, "w");
         sprintf(parbuffer, "%s/log", dat::output_path);
         dat::logfile = fopen(parbuffer,"w");
         dat::neval = 0;
 
-        while(fgets(parbuffer, 80, parfile) != NULL){
-            for(int i = 0; i < 79 && parbuffer[i] != '\0'; i++){
+        while(fgets(parbuffer, 81, parfile) != NULL){
+            if(parbuffer[0] == '#'){
+                continue;
+            }
+            for(int i = 0; i < 81 && parbuffer[i] != '\0'; i++){
                 if(parbuffer[i] == '#'){
                     parbuffer[i] = '\n';
                     parbuffer[i+1] = '\0';
@@ -2887,7 +2999,7 @@ static void inversionRoutine(){
 int main(int argc, const char *argv[]){
     const char *datapath;
     if(argc == 1){
-        datapath = "data";
+        datapath = "config";
     }
     else{
         datapath = argv[1];

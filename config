@@ -1,27 +1,38 @@
+# ------------general------------
 simulation_mode                 = 0       # 0: inversion 1: forward 2: adjoint
 wave_propagation_type           = 0       # 0: sh 1: psv 2: both
 parametrisation                 = 1       # 0: lambda/mu 1: vp/vs
 misfit_type                     = 1       # 0: waveform 1: envelope
 obs_type                        = 1       # 0: v 1: u 2: u(multiple sources)
-obs_su                          = 0       # read observed data from su file
-obs_su_path                     = trace   # folder containing su file
 ntask                           = 5       # run foward simultaneously
 
+# --------------path-------------
 model_init                      = model/homo_3500
 model_true                      = model/checker_4x4
-output_path                     = output/checker_4x4
+output_path                     = output/checker_4x4_aa
 
+obs_su                          = 0       # read observed data from su file
+src_file                        = 0       # read source data from file
+rec_file                        = 0       # read receiver data from file
+obs_su_path                     = trace   # folder containing su file
+src_file_path                   = data    # folder containing source file
+rec_file_path                   = data    # folder containing receiver file
+
+# ------------forward------------
 nt                              = 5000
 dt                              = 0.06
 sfe                             = 10      # save wavefield every sfe timestep
 nsrc                            = 25      # number of sources
+nrec                            = 132     # number of receivers
 
+# ------absorbing boundaries-----
 absorb_bottom                   = 1
-absorb_right                    = 1
+absorb_right                    = 0
 absorb_top                      = 1
 absorb_left                     = 1
 absorb_width                    = 48000   # width of absorbing boundary
 
+# ----------optimization---------
 optimize                        = 1       # 0: NLCG 1: LBFGS
 inv_maxiter                     = 0       # reset search direction periodicly
 inv_parameter                   = 1       # 0: lambda 1: mu 2: rho
@@ -33,4 +44,15 @@ ls_stepleninit                  = 0.05    # initial step length of line search
 ls_stepcountmax                 = 10      # maximum step count of line search
 ls_thresh                       = 1.2     # stop if |log(x/x0)| < log(thresh)
 filter_kernel                   = 5       # apply gaussian filter to kernel
-unsharp_mask                    = 0.3     # sharpen output image
+unsharp_mask                    = 0.0     # sharpen output image
+
+# source/receiver configuration, ignored if src_file/rec_file = 0
+# source type 1: ricker
+# alignment 0: top 1: bottom 2: left 3: right 4: spread
+src_align                       = 0
+rec_align                       = 0
+src_type                        = 1
+src_f0                          = 0.084
+src_t0                          = 0
+src_angle                       = 0.00
+src_factor                      = 1.000e+10
