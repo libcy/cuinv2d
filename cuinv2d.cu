@@ -1526,8 +1526,8 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
                 L -= width;
             }
             float dx = L / (n + 1);
-            for(int i = 1; i <= n; i++){
-                pos[i] = S + dx * i;
+            for(int i = 0; i < n; i++){
+                pos[i] = S + dx * (i+1);
             }
             mat::copyHostToDevice(d_pos_x, pos, n);
         }
@@ -2398,10 +2398,10 @@ static float calculateEnvelopeMisfit(float **adstf, float *d_misfit, float **out
     mat::calc(ersd, ersd, etmp, nt);
     hilbert(ersd, obs);
     copyC2Imag<<<nt, 1>>>(ersd, obs, nt);
-
+    // from here
     prepareEnvelopeSTF<<<nt, 1>>>(adstf, etmp, d_misfit, ersd, nt, irec, j*nt);
     mat::calc(ersd, 1, esyn, -1, eobs, nt);
-    return mat::norm(ersd, nt);
+    return mat::norm(ersd, nt) * sqrt(dt);
 }
 static float computeKernelsAndMisfit(int kernel){
     float misfit = 0;
