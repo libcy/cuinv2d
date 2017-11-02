@@ -2,14 +2,14 @@
 simulation_mode                 = 0       # 0: inversion 1: forward 2: adjoint
 wave_propagation_type           = 0       # 0: sh 1: psv 2: both
 parametrisation                 = 1       # 0: lambda/mu 1: vp/vs
-misfit_type                     = 0       # 0: waveform 1: envelope
+misfit_type                     = 1       # 0: waveform 1: envelope
 obs_type                        = 1       # 0: v 1: u 2: u(multiple sources)
 ntask                           = 5       # run foward simultaneously
 
 # --------------path-------------
 model_init                      = model/homo_3500
 model_true                      = model/checker_4x4
-output_path                     = output/checker_4x4_f
+output_path                     = output/checker_4x4_a
 
 obs_su                          = 0       # read observed data from su file
 src_file                        = 0       # read source data from file

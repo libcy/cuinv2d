@@ -2392,13 +2392,16 @@ static float calculateEnvelopeMisfit(float **adstf, float *d_misfit, float **out
     copyC2Abs<<<nt, 1>>>(esyn, syn, nt);
     copyC2Abs<<<nt, 1>>>(eobs, obs, nt);
     float max = mat::amax(esyn, nt) * 0.05;
+    if(max < 0.05){
+        max = 0.05;
+    }
     envelopetmp<<<nt, 1>>>(etmp, esyn, eobs, max);
 
     copyC2Imag<<<nt, 1>>>(ersd, syn, nt);
     mat::calc(ersd, ersd, etmp, nt);
     hilbert(ersd, obs);
     copyC2Imag<<<nt, 1>>>(ersd, obs, nt);
-    // from here
+
     prepareEnvelopeSTF<<<nt, 1>>>(adstf, etmp, d_misfit, ersd, nt, irec, j*nt);
     mat::calc(ersd, 1, esyn, -1, eobs, nt);
     return mat::norm(ersd, nt) * sqrt(dt);
@@ -3095,6 +3098,7 @@ int main(int argc, const char *argv[]){
                 break;
             }
             case 2:{
+                cublasCreate(&cublas_handle);
                 if(dat::misfit_type == 1){
                     cufftPlan1d(&cufft_handle, nt, CUFFT_C2C, 1);
                 }
@@ -3106,6 +3110,7 @@ int main(int argc, const char *argv[]){
                 loadModel(dat::model_init);
                 computeKernels();
                 exportData(0);
+                cublasDestroy(cublas_handle);
                 if(dat::misfit_type == 1){
                     cufftDestroy(cufft_handle);
                 }
