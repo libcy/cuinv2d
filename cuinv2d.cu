@@ -1495,23 +1495,27 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
         float *pos = mat::createHost(n);
         float L;
         float S = 0;
+        float &Lx = dat::Lx;
+        float &Lz = dat::Lz;
         float &width = dat::absorb_width;
+        float dx = Lx / (nx - 1);
+        float dz = Lz / (nz - 1);
         switch(type){
             case 0:{
                 if(dat::absorb_top){
                     mat::init(d_pos_z, width, n);
                 }
                 else{
-                    mat::init(d_pos_z, 0, n);
+                    mat::init(d_pos_z, dz, n);
                 }
                 break;
             }
             case 1:{
                 if(dat::absorb_bottom){
-                    mat::init(d_pos_z, dat::Lz - width, n);
+                    mat::init(d_pos_z, Lz - width, n);
                 }
                 else{
-                    mat::init(d_pos_z, dat::Lz, n);
+                    mat::init(d_pos_z, Lz - dz, n);
                 }
                 break;
             }
@@ -1710,6 +1714,13 @@ static int importData(const char *datapath){
             nt = dat::sfe * lroundf((float)nt / dat::sfe);
         }
         dat::nsfe = nt / dat::sfe;
+
+        if(dat::absorb_width < 1){
+            dat::absorb_left = 0;
+            dat::absorb_right = 0;
+            dat::absorb_top = 0;
+            dat::absorb_bottom = 0;
+        }
 
 
         if(sh){
