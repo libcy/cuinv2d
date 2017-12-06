@@ -1519,6 +1519,24 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
                 }
                 break;
             }
+            case 2:{
+                if(dat::absorb_left){
+                    mat::init(d_pos_x, width, n);
+                }
+                else{
+                    mat::init(d_pos_x, dx, n);
+                }
+                break;
+            }
+            case 3:{
+                if(dat::absorb_right){
+                    mat::init(d_pos_x, Lx - width, n);
+                }
+                else{
+                    mat::init(d_pos_x, Lx - dx, n);
+                }
+                break;
+            }
         }
         if(type == 0 || type == 1){
             L = dat::Lx;
@@ -1531,9 +1549,24 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
             }
             float dx = L / (n + 1);
             for(int i = 0; i < n; i++){
-                pos[i] = S + dx * (i+1);
+                pos[i] = S + dx * (i + 1);
             }
             mat::copyHostToDevice(d_pos_x, pos, n);
+        }
+        else if(type == 2 || type == 3){
+            L = dat::Lz;
+            if(dat::absorb_top){
+                L -= width;
+                S = width;
+            }
+            if(dat::absorb_bottom){
+                L -= width;
+            }
+            float dz = L / (n + 1);
+            for(int i = 0; i < n; i++){
+                pos[i] = S + dz * (i + 1);
+            }
+            mat::copyHostToDevice(d_pos_z, pos, n);
         }
         free(pos);
     }
