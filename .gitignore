@@ -1,5 +1,6 @@
-output/
-trace/
+/output
+/trace
+/config
 *.exe
 *.lib
 *.exp

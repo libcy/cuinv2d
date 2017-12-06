@@ -9,7 +9,7 @@ ntask                           = 5       # run foward simultaneously
 # --------------path-------------
 model_init                      = model/homo_3500
 model_true                      = model/checker_4x4
-output_path                     = output/checker_4x4_a
+output_path                     = output/checker_4x4
 
 obs_su                          = 0       # read observed data from su file
 src_file                        = 0       # read source data from file
