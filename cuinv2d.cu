@@ -1487,19 +1487,54 @@ static int loadModel(const char *model_dir){
     return 1;
 }
 static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
+    float &width = dat::absorb_width;
     if(type == 4){
+        float *posx = mat::createHost(n);
+        float *posz = mat::createHost(n);
 
+        float nxf = sqrt((float)n * dat::nx / dat::nz);
+        float nzf = (float)n / nxf;
+        int nx = lroundf(ceil(nxf));
+        int nz = lroundf(ceil(nzf));
+
+        float Sx = 0;
+        float Sz = 0;
+        float Lx = dat::Lx;
+        float Lz = dat::Lz;
+
+        if(dat::absorb_left){
+            Lx -= width;
+            Sx = width;
+        }
+        if(dat::absorb_right){
+            Lx -= width;
+        }
+        dx = Lx / (nx + 1);
+
+        if(dat::absorb_top){
+            Lz -= width;
+            Sz = width;
+        }
+        if(dat::absorb_bottom){
+            Lz -= width;
+        }
+        dz = Lz / (nz + 1);
+
+        int k = 0;
+        for(int i = 0; i < nx; i++){
+            for(int j = 0; j < nz; j++){
+                if(k >= n) break;
+                posx[k] = Sx + dx * (i + 1);
+                posz[k] = Sz + dz * (i + 1);
+                k++;
+            }
+        }
+
+        mat::copyHostToDevice(d_pos_x, posx, n);
+        mat::copyHostToDevice(d_pos_z, posz, n);
     }
     else{
-        // from here
         float *pos = mat::createHost(n);
-        float L;
-        float S = 0;
-        float &Lx = dat::Lx;
-        float &Lz = dat::Lz;
-        float &width = dat::absorb_width;
-        float dx = Lx / (nx - 1);
-        float dz = Lz / (nz - 1);
         switch(type){
             case 0:{
                 if(dat::absorb_top){
@@ -1538,6 +1573,8 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
                 break;
             }
         }
+        float L, d;
+        float S = 0;
         if(type == 0 || type == 1){
             L = dat::Lx;
             if(dat::absorb_left){
@@ -1547,9 +1584,9 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
             if(dat::absorb_right){
                 L -= width;
             }
-            float dx = L / (n + 1);
+            d = L / (n + 1);
             for(int i = 0; i < n; i++){
-                pos[i] = S + dx * (i + 1);
+                pos[i] = S + d * (i + 1);
             }
             mat::copyHostToDevice(d_pos_x, pos, n);
         }
@@ -1562,9 +1599,9 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
             if(dat::absorb_bottom){
                 L -= width;
             }
-            float dz = L / (n + 1);
+            d = L / (n + 1);
             for(int i = 0; i < n; i++){
-                pos[i] = S + dz * (i + 1);
+                pos[i] = S + d * (i + 1);
             }
             mat::copyHostToDevice(d_pos_z, pos, n);
         }
