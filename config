@@ -47,7 +47,7 @@ filter_kernel                   = 5       # apply gaussian filter to kernel
 unsharp_mask                    = 0.0     # sharpen output image
 
 # --------source/receiver--------
-# ignored if src_file/rec_file = 0
+# ignored if src_file/rec_file = 1
 # source type 1: ricker
 # alignment 0: top 1: bottom 2: left 3: right 4: fill
 src_align                       = 0
