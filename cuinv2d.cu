@@ -1534,8 +1534,8 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
         mat::copyHostToDevice(d_pos_z, posz, n);
     }
     else{
-        float dx = dat::Lx / (nx - 1);
-        float dz = dat::Lz / (nz - 1);
+        float dx = 2 * dat::Lx / (nx - 1);
+        float dz = 2 * dat::Lz / (nz - 1);
         float *pos = mat::createHost(n);
         switch(type){
             case 0:{
@@ -1757,8 +1757,6 @@ static int importData(const char *datapath){
 
         mat::copyHostToDevice(dat::rec_x, rec_x, nrec);
         mat::copyHostToDevice(dat::rec_z, rec_z, nrec);
-
-        // mat::init(dat::rec_z, 12000, nrec); // later
 
         free(rec_x);
         free(rec_z);
