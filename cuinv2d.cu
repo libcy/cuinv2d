@@ -1525,7 +1525,7 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
             for(int j = 0; j < nz; j++){
                 if(k >= n) break;
                 posx[k] = Sx + dx * (i + 1);
-                posz[k] = Sz + dz * (i + 1);
+                posz[k] = Sz + dz * (j + 1);
                 k++;
             }
         }
