@@ -1637,7 +1637,6 @@ static int importData(const char *datapath){
     dat::obs_su_path = copyString("trace");
     dat::src_file_path = copyString("data");
     dat::rec_file_path = copyString("data");
-    dat::output_path = copyString("output");
     dat::model_init = copyString("model_init");
     dat::model_true = copyString("model_true");
     dat::optimize = 1;
@@ -3129,6 +3128,7 @@ static void inversionRoutine(){
 
 int main(int argc, const char *argv[]){
     const char *datapath;
+    dat::output_path = copyString("output");
     if(argc == 1){
         datapath = "config";
     }
