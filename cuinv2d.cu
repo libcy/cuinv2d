@@ -3134,6 +3134,9 @@ int main(int argc, const char *argv[]){
     }
     else{
         datapath = argv[1];
+        if(argc >= 3){
+            dat::output_path = argv[2];
+        }
     }
     dat::parfile = datapath;
     clock_t timestart = clock();
