@@ -66,13 +66,17 @@ namespace dat{
     int misfit_type;
     int parametrisation;
 
-    const char *parfile;
+    char *parfile;
     char *obs_su_path;
     char *src_file_path;
     char *rec_file_path;
     char *model_init;
     char *model_true;
     char *output_path;
+
+    float model_p;
+    float model_s;
+    float model_r;
 
     int *src_type;  // host (ricker = 1)
     float *src_angle;  // host
@@ -1412,7 +1416,7 @@ static void readFortran(const char *fname, int isrc){
 
     fclose(parfile);
 }
-static int loadModel(const char *model_dir){
+static int loadModel(const char *model_dir, float mp, float ms, float mr){
     char path[80];
 
     sprintf(path, "%s/proc000000_x.bin", model_dir);
@@ -1446,6 +1450,10 @@ static int loadModel(const char *model_dir){
     fread(rbuffer, sizeof(float), npt, rfile);
     fread(pbuffer, sizeof(float), npt, pfile);
     fread(sbuffer, sizeof(float), npt, sfile);
+
+    if(mp > 0) mat::initHost(pbuffer, mp, npt);
+    if(ms > 0) mat::initHost(sbuffer, ms, npt);
+    if(mr > 0) mat::initHost(rbuffer, mr, npt);
 
     float *dxbuffer = mat::create(npt);
     float *dzbuffer = mat::create(npt);
@@ -1485,6 +1493,9 @@ static int loadModel(const char *model_dir){
     fclose(sfile);
 
     return 1;
+}
+static int loadModel(const char *model_dir){
+    return loadModel(model_dir, -1, -1, -1);
 }
 static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
     float &width = dat::absorb_width;
@@ -1637,12 +1648,9 @@ static int importData(const char *datapath){
     dat::obs_su_path = copyString("trace");
     dat::src_file_path = copyString("data");
     dat::rec_file_path = copyString("data");
-    dat::model_init = copyString("model_init");
-    dat::model_true = copyString("model_true");
     dat::optimize = 1;
     dat::filter_kernel = 4;
     dat::unsharp_mask = 0;
-    dat::inv_iteration = 5;
     dat::inv_maxiter = 0;
     dat::lbfgs_mem = 5;
     dat::ls_stepleninit = 0.05;
@@ -3038,7 +3046,7 @@ static void inversionRoutine(){
 
     prepareObs();
     exportData(-1);
-    loadModel(dat::model_init);
+    loadModel(dat::model_init, dat::model_p, dat::model_s, dat::model_r);
 
     float **m_new;
     float **m_old;
@@ -3104,7 +3112,7 @@ static void inversionRoutine(){
         exportData(dat::inv_iteration);
     }
 
-    fprintf(dat::logfile, "misfit\n");
+    fprintf(dat::logfile, "misfit\n  %f\n", dat::misfit_ref);
     for(int i = 0; lroundf(dat::opti_history[i][0]) >=0; i++){
         fprintf(dat::logfile, "  %ld %f\n", lroundf(dat::opti_history[i][0]), dat::opti_history[i][1]);
     }
@@ -3127,27 +3135,46 @@ static void inversionRoutine(){
 }
 
 int main(int argc, const char *argv[]){
-    const char *datapath;
+    dat::parfile = copyString("config");
     dat::output_path = copyString("output");
-    if(argc == 1){
-        datapath = "config";
-    }
-    else{
-        datapath = argv[1];
-        if(argc >= 3){
-            dat::output_path = copyString(argv[2]);
+    dat::model_init = copyString("model_init");
+    dat::model_true = copyString("model_true");
+    dat::model_p = -1;
+    dat::model_s = -1;
+    dat::model_r = -1;
+    dat::inv_iteration = 5;
+    for(int i = 1; i < argc; i += 2){
+        if(strlen(argv[i]) == 2){
+            switch(argv[i][1]){
+                case 'c': dat::parfile = copyString(argv[i+1]); break;
+                case 'o': dat::output_path = copyString(argv[i+1]); break;
+                case 'i': dat::model_init = copyString(argv[i+1]); break;
+                case 't': dat::model_true = copyString(argv[i+1]); break;
+                case 'p': dat::model_p = str2float(argv[i+1]); break;
+                case 's': dat::model_s = str2float(argv[i+1]); break;
+                case 'r': dat::model_r = str2float(argv[i+1]); break;
+                case 'n': dat::inv_iteration = str2int(argv[i+1]); break;
+                case 'a': {
+                    int num = str2int(argv[i+1]);
+                    dat::src_align = num / 10;
+                    dat::rec_align = num % 10;
+                    break;
+                }
+            }
+        }
+        else{
+            break;
         }
     }
-    dat::parfile = datapath;
     clock_t timestart = clock();
-    if(importData(datapath)){
+    if(importData(dat::parfile)){
         switch(mode){
             case 0:{
                 inversionRoutine();
                 break;
             }
             case 1:{
-                loadModel(dat::model_init);
+                loadModel(dat::model_init, dat::model_p, dat::model_s, dat::model_r);
                 prepareSTF();
                 dat::ntask = 1;
                 runForward(-1, -1);
@@ -3191,7 +3218,7 @@ int main(int argc, const char *argv[]){
                     printf("\n");
                 }
                 printf("\n");
-                loadModel(dat::model_init);
+                loadModel(dat::model_init, dat::model_p, dat::model_s, dat::model_r);
                 computeKernels();
                 exportData(0);
                 cublasDestroy(cublas_handle);
@@ -3207,25 +3234,25 @@ int main(int argc, const char *argv[]){
                 break;
             }
             case 11:{
-                loadModel(dat::model_init);
+                loadModel(dat::model_init, dat::model_p, dat::model_s, dat::model_r);
                 generateChecker(dat::mu, 0.1, 0.5, 2, 2);
                 exportData(-1);
                 break;
             }
             case 12:{
-                loadModel(dat::model_init);
+                loadModel(dat::model_init, dat::model_p, dat::model_s, dat::model_r);
                 generateLayer(dat::mu, 0.1, 5);
                 exportData(-1);
                 break;
             }
             case 13:{
-                loadModel(dat::model_init);
+                loadModel(dat::model_init, dat::model_p, dat::model_s, dat::model_r);
                 generateRandomLayer(dat::mu, 0.1, 0.4, 5);
                 exportData(-1);
                 break;
             }
             case 15:{
-                loadModel(dat::model_init);
+                loadModel(dat::model_init, dat::model_p, dat::model_s, dat::model_r);
                 mat::copy(dat::mu, dat::mu, 0.64, nx, nz);
                 exportData(-1);
             }

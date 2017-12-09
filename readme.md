@@ -8,7 +8,20 @@ nvcc cuinv2d.cu -arch=sm_50 -lcublas -lcusolver -lcufft
 ```
 
 #### Input file
-Fortran style input file which is similar to [specfem2d](https://github.com/geodynamics/specfem2d). Default input file is config in the root directory, you can specify the path through command line argument (argv[1]). Model, source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
+Fortran style input file which is similar to [specfem2d](https://github.com/geodynamics/specfem2d). Default input file is config in the root directory, you can specify the path through command line argument (e.g. ./a.out -c config). Model, source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
+
+command line arguments (optional, does not overwrite input file)
+```
+-c <path-to-config-file>
+-o <output-directory>
+-i <initial-model-directory>
+-t <true-model-directory>
+-p <homogeneous-initial-model-vp>
+-s <homogeneous-initial-model-vs>
+-r <homogeneous-initial-model-rho>
+-a <source-receiver-alignment>
+-n <inversion-iteration>
+```
 
 #### Plotting
 (Requires scipy and numpy, script modified from [seisflows](http://seisflows.readthedocs.io/en/latest/instructions_remote.html?highlight=plot))
