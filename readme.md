@@ -60,3 +60,6 @@ Currently supports conjugate gradient method and l-bfgs method. The latter gener
 
 * Model after 15 iterations(initial model: Vs_init = 3150km/s)<br>
 ![](https://raw.githubusercontent.com/libcy/cuinv2d/master/img/15.png)
+
+#### Contact
+ccy@pku.edu.cn
