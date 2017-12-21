@@ -14,13 +14,19 @@ command line arguments (optional, does not overwrite input file)
 ```
 -c <path-to-config-file>
 -o <output-directory>
--i <initial-model-directory>
--t <true-model-directory>
--p <homogeneous-initial-model-vp>
--s <homogeneous-initial-model-vs>
--r <homogeneous-initial-model-rho>
--a <source-receiver-alignment>
--n <inversion-iteration>
+
+-mi <initial-model-directory>
+-mt <true-model-directory>
+-mp <homogeneous-initial-model-vp>
+-ms <homogeneous-initial-model-vs>
+-mr <homogeneous-initial-model-rho>
+
+-ns <source-number>
+-nr <receiver-number>
+-ni <inversion-iteration>
+
+-as <source-alignment>
+-ar <receiver-alignment>
 ```
 
 #### Plotting
