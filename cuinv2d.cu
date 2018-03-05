@@ -67,6 +67,7 @@ namespace dat{
     int parametrisation;
 
     char *parfile;
+    char *argstr;
     char *obs_su_path;
     char *src_file_path;
     char *rec_file_path;
@@ -1622,7 +1623,7 @@ static void initialisePosition(float *d_pos_x, float *d_pos_z, int n, int type){
     }
 
 }
-static int importData(const char *datapath){
+static int importData(const char *datapath, int argc, const char *argv[]){
     dat::wave_propagation_sh = 1;
     dat::wave_propagation_psv = 0;
     dat::obs_type = 0;
@@ -1659,6 +1660,83 @@ static int importData(const char *datapath){
 
     char path[80];
     readFortran(datapath, -1);
+
+    if(argc > 1){
+        strcat(dat::argstr, "# ------------ argv ------------\n");
+        for(int i = 1; i < argc; i += 2){
+            if(strcmp(argv[i], "-o") == 0){
+                strcat(dat::argstr, "output_path                     = ");
+                dat::output_path = copyString(argv[i+1]);
+            }
+            else if(strlen(argv[i]) == 3){
+                switch(argv[i][1]){
+                    case 'm':
+                        switch(argv[i][2]){
+                            case 't':
+                                strcat(dat::argstr, "model_true                      = ");
+                                dat::model_true = copyString(argv[i+1]);
+                                break;
+                            case 'i':
+                                strcat(dat::argstr, "model_init                      = ");
+                                dat::model_init = copyString(argv[i+1]);
+                                break;
+                            case 'p':
+                                strcat(dat::argstr, "model_init_vp                   = ");
+                                dat::model_p = str2float(argv[i+1]);
+                                break;
+                            case 's':
+                                strcat(dat::argstr, "model_init_vs                   = ");
+                                dat::model_s = str2float(argv[i+1]);
+                                break;
+                            case 'r':
+                                strcat(dat::argstr, "model_init_rho                  = ");
+                                dat::model_r = str2float(argv[i+1]);
+                                break;
+                            case '\0':
+                                strcat(dat::argstr, "simulation_mode                 = ");
+                                dat::simulation_mode = str2int(argv[i+1]);
+                                break;
+                        }
+                        break;
+                    case 'n':
+                        switch(argv[i][2]){
+                            case 'i':
+                                strcat(dat::argstr, "inv_iteration                   = ");
+                                dat::inv_iteration = str2int(argv[i+1]);
+                                break;
+                            case 's':
+                                strcat(dat::argstr, "nsrc                            = ");
+                                dat::nsrc = str2int(argv[i+1]);
+                                break;
+                            case 'r':
+                                strcat(dat::argstr, "nrec                            = ");
+                                dat::nrec = str2int(argv[i+1]);
+                                break;
+                        }
+                        break;
+                    case 'a':
+                        switch(argv[i][2]){
+                            case 's':
+                                strcat(dat::argstr, "src_align                       = ");
+                                dat::src_align = str2int(argv[i+1]);
+                                break;
+                            case 'r':
+                                strcat(dat::argstr, "rec_align                       = ");
+                                dat::rec_align = str2int(argv[i+1]);
+                                break;
+                        }
+                        break;
+                }
+            }
+            else if(strcmp(argv[i], "-c") != 0){
+                break;
+            }
+            strcat(dat::argstr, argv[i+1]);
+            strcat(dat::argstr, "\n");
+        }
+        strcat(dat::argstr, "\n# ------------ file ------------");
+    }
+
     initialiseModel(dat::model_init);
     createDirectory(dat::output_path);
 
@@ -2978,7 +3056,7 @@ static void lineSearch(float **m, float **g, float **p, float f){
         }
     }
 }
-static void inversionRoutine(const char *argstr){
+static void inversionRoutine(){
     cublasCreate(&cublas_handle);
     cusolverDnCreate(&solver_handle);
     if(dat::misfit_type == 1){
@@ -3001,7 +3079,7 @@ static void inversionRoutine(const char *argstr){
         dat::logfile = fopen(parbuffer,"w");
         dat::neval = 0;
 
-        fprintf(outfile, "%s\n", argstr);
+        fprintf(outfile, "%s\n", dat::argstr);
         while(fgets(parbuffer, 81, parfile) != NULL){
             if(parbuffer[0] == '#'){
                 continue;
@@ -3135,6 +3213,7 @@ static void inversionRoutine(const char *argstr){
 
 int main(int argc, const char *argv[]){
     char argstr[400] = {'\0'};
+    dat::argstr = argstr;
     dat::parfile = copyString("config");
     dat::output_path = copyString("output");
     dat::model_init = copyString("model_init");
@@ -3150,92 +3229,17 @@ int main(int argc, const char *argv[]){
     if(argc > 1){
         for(int i = 1; i < argc; i += 2){
             if(strcmp(argv[i], "-c") == 0){
-                strcat(argstr, "parfile = ");
+                strcat(dat::argstr, "parfile = ");
                 dat::parfile = copyString(argv[i+1]);
             }
         }
     }
 
     clock_t timestart = clock();
-    if(importData(dat::parfile)){
-        if(argc > 1){
-            strcat(argstr, "# ------------ argv ------------\n");
-            for(int i = 1; i < argc; i += 2){
-                if(strcmp(argv[i], "-o") == 0){
-                    strcat(argstr, "output_path                     = ");
-                    dat::output_path = copyString(argv[i+1]);
-                }
-                else if(strlen(argv[i]) == 3){
-                    switch(argv[i][1]){
-                        case 'm':
-                            switch(argv[i][2]){
-                                case 't':
-                                    strcat(argstr, "model_true                      = ");
-                                    dat::model_true = copyString(argv[i+1]);
-                                    break;
-                                case 'i':
-                                    strcat(argstr, "model_init                      = ");
-                                    dat::model_init = copyString(argv[i+1]);
-                                    break;
-                                case 'p':
-                                    strcat(argstr, "model_init_vp                   = ");
-                                    dat::model_p = str2float(argv[i+1]);
-                                    break;
-                                case 's':
-                                    strcat(argstr, "model_init_vs                   = ");
-                                    dat::model_s = str2float(argv[i+1]);
-                                    break;
-                                case 'r':
-                                    strcat(argstr, "model_init_rho                  = ");
-                                    dat::model_r = str2float(argv[i+1]);
-                                    break;
-                                case '\0':
-                                    strcat(argstr, "simulation_mode                 = ");
-                                    dat::simulation_mode = str2int(argv[i+1]);
-                                    break;
-                            }
-                            break;
-                        case 'n':
-                            switch(argv[i][2]){
-                                case 'i':
-                                    strcat(argstr, "inv_iteration                   = ");
-                                    dat::inv_iteration = str2int(argv[i+1]);
-                                    break;
-                                case 's':
-                                    strcat(argstr, "nsrc                            = ");
-                                    dat::nsrc = str2int(argv[i+1]);
-                                    break;
-                                case 'r':
-                                    strcat(argstr, "nrec                            = ");
-                                    dat::nrec = str2int(argv[i+1]);
-                                    break;
-                            }
-                            break;
-                        case 'a':
-                            switch(argv[i][2]){
-                                case 's':
-                                    strcat(argstr, "src_align                       = ");
-                                    dat::src_align = str2int(argv[i+1]);
-                                    break;
-                                case 'r':
-                                    strcat(argstr, "rec_align                       = ");
-                                    dat::rec_align = str2int(argv[i+1]);
-                                    break;
-                            }
-                            break;
-                    }
-                    strcat(argstr, argv[i+1]);
-                    strcat(argstr, "\n");
-                }
-                else{
-                    break;
-                }
-            }
-            strcat(argstr, "\n# ------------ file ------------");
-        }
+    if(importData(dat::parfile, argc, argv)){
         switch(mode){
             case 0:{
-                inversionRoutine(argstr);
+                inversionRoutine();
                 break;
             }
             case 1:{
