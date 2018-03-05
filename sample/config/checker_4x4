@@ -51,7 +51,7 @@ unsharp_mask                    = 0.0     # sharpen output image
 # source type 1: ricker
 # alignment 0: top 1: bottom 2: left 3: right 4: fill
 src_align                       = 0
-rec_align                       = 0
+rec_align                       = 4
 src_type                        = 1
 src_f0                          = 0.084
 src_t0                          = 0
