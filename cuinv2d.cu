@@ -3160,7 +3160,6 @@ int main(int argc, const char *argv[]){
     if(importData(dat::parfile)){
         if(argc > 1){
             strcat(argstr, "# ------------ argv ------------\n");
-            int model_inited = 0;
             for(int i = 1; i < argc; i += 2){
                 if(strcmp(argv[i], "-o") == 0){
                     strcat(argstr, "output_path                     = ");
@@ -3173,12 +3172,8 @@ int main(int argc, const char *argv[]){
                                 case 't':
                                     strcat(argstr, "model_true                      = ");
                                     dat::model_true = copyString(argv[i+1]);
-                                    if(!model_inited){
-                                        dat::model_init = copyString(argv[i+1]);
-                                    }
                                     break;
                                 case 'i':
-                                    model_inited = 1;
                                     strcat(argstr, "model_init                      = ");
                                     dat::model_init = copyString(argv[i+1]);
                                     break;
