@@ -8,9 +8,9 @@ nvcc cuinv2d.cu -arch=sm_50 -lcublas -lcusolver -lcufft
 ```
 
 #### Input file
-Fortran style input file which is similar to [specfem2d](https://github.com/geodynamics/specfem2d). Default input file is config in the root directory, you can specify the path through command line argument (e.g. ./a.out -c config). Model, source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
+Fortran style input file which is similar to [specfem2d](https://github.com/geodynamics/specfem2d). Default input file is config in the root directory, you can specify the path through command line argument (e.g. ./a.out -c sample/config/checker_4x4). Model, source and station data of specfem2d can be used directly without any modification. Seismograms are read/written in [Seismic Unix](http://www.cwp.mines.edu/cwpcodes/) format.
 
-command line arguments (optional, does not overwrite input file)
+command line arguments (optional, overwrites input file)
 ```
 -c <path-to-config-file>
 -o <output-directory>
