@@ -15,6 +15,7 @@ command line arguments (optional, overwrites input file)
 -c <path-to-config-file>
 -o <output-directory>
 -m <simulation-mode>
+-p <display-mode>
 
 -mi <initial-model-directory>
 -mt <true-model-directory>

@@ -46,6 +46,7 @@ namespace dat{
     int wave_propagation_sh;
     int wave_propagation_psv;
     int simulation_mode;
+    int display_mode;
 
     int absorb_left;
     int absorb_right;
@@ -1102,6 +1103,7 @@ static int str2int(const char *str){
     return lroundf(str2float(str));
 }
 static void printStat(int i, int b){
+    if(dat::display_mode == 0) return;
     for(int a=i+1; a<=getTaskIndex(i)+1; a++){
         if(b >= 100){
             if(a < 10){
@@ -1344,6 +1346,9 @@ static void readFortran(const char *fname, int isrc){
                         }
                         else if(strcmp(key, "inv_parameter") == 0){
                             dat::inv_parameter = str2int(value);
+                        }
+                        else if(strcmp(key, "display_mode") == 0){
+                            dat::display_mode = str2int(value);
                         }
                     }
                     else{
@@ -1665,7 +1670,7 @@ static int importData(const char *datapath, int argc, const char *argv[]){
         strcat(dat::argstr, "# ------------ argv ------------\n");
         for(int i = 1; i < argc; i += 2){
             if(strlen(argv[i]) == 2){
-                switch(argv[i][0]){
+                switch(argv[i][1]){
                     case 'o':{
                         strcat(dat::argstr, "output_path                     = ");
                         dat::output_path = copyString(argv[i+1]);
@@ -1674,6 +1679,16 @@ static int importData(const char *datapath, int argc, const char *argv[]){
                     case 'm':{
                         strcat(dat::argstr, "simulation_mode                 = ");
                         dat::simulation_mode = str2int(argv[i+1]);
+                        break;
+                    }
+                    case 'p':{
+                        strcat(dat::argstr, "display_mode                    = ");
+                        dat::display_mode = str2int(argv[i+1]);
+                        break;
+                    }
+                    case 'c':{
+                        strcat(dat::argstr, "par_file                        = ");
+                        dat::display_mode = str2int(argv[i+1]);
                         break;
                     }
                 }
@@ -2996,7 +3011,10 @@ static void restartSearch(float **p, float **g){
     }
 }
 static void lineSearch(float **m, float **g, float **p, float f){
-    printf("\nPerforming line search\n");
+    if(dat::display_mode != 0){
+        printf("\n");
+    }
+    printf("Performing line search\n");
     int status = 0;
     float alpha = 0;
 
@@ -3176,7 +3194,10 @@ static void inversionRoutine(){
     clock_t timestart = clock();
     for(int iter = 0; iter < dat::inv_iteration; iter++){
         fprintf(dat::logfile, "iteration %d / %d\n", iter + 1, dat::inv_iteration);
-        printf("\n\nStarting iteration %d / %d\n", iter + 1, dat::inv_iteration);
+        if(dat::display_mode != 0){
+            printf("\n");
+        }
+        printf("\nStarting iteration %d / %d\n", iter + 1, dat::inv_iteration);
         float f = computeKernels();
         if(iter == 0){
             dat::misfit_ref = f;
@@ -3231,7 +3252,7 @@ static void inversionRoutine(){
 }
 
 int main(int argc, const char *argv[]){
-    char argstr[400] = {'\0'};
+    char argstr[6000] = {'\0'};
     dat::argstr = argstr;
     dat::parfile = copyString("config");
     dat::output_path = copyString("output");
@@ -3248,7 +3269,6 @@ int main(int argc, const char *argv[]){
     if(argc > 1){
         for(int i = 1; i < argc; i += 2){
             if(strcmp(argv[i], "-c") == 0){
-                strcat(dat::argstr, "parfile = ");
                 dat::parfile = copyString(argv[i+1]);
             }
         }
